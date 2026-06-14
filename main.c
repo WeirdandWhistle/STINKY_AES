@@ -230,7 +230,7 @@ void temp_AES_GCM(uint8_t* ciphertext, uint8_t plaintext[16], uint8_t key[16], u
         tag[i] ^= S[i];
     }
 
-    printf("tag: "); print_hex(tag, 16);
+    printf("tag:       "); print_hex(tag, 16);
 
 }
 void from_hex(uint8_t* out, char* in, int len){
@@ -245,6 +245,12 @@ int main(){
     from_hex(iv, "abcdef12345678901f2f3f4f",24);
     uint8_t plaintext[16] = {0};
     from_hex(plaintext, "0123456789abcdef0123456789abcdef",32);
+
+    uint8_t ciphertext[16] = {0};
+
+    temp_AES_GCM(ciphertext, plaintext, key, iv);
+
+    printf("ciphertext:"); print_hex(ciphertext, 16);
 
     return 0;
 }

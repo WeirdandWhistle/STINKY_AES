@@ -1,0 +1,132 @@
+ void get_uint32_bytes(uint8_t* a, uint32_t b){
+
+uint32_t temp = htonl(b);
+
+memcpy(a, &temp, 4);
+
+}
+
+void get_Jn_bytes(uint8_t* out, uint8_t iv[12], uint32_t counter){
+
+uint8_t counter_array[4];
+
+get_uint32_bytes(counter_array, counter);
+
+combine_array(out, iv, 12, counter_array, 4);
+
+}
+
+void temp_AES_GCM(uint8_t* ciphertext, uint8_t plaintext[16], uint8_t key[16], uint8_t iv[12]){
+
+
+uint32_t w[44] = {0};
+
+key_expansion(key, w, 4);
+
+__m128i round_keys[11] __attribute__((aligned(16)));
+
+for (int i = 0; i < 44; i++) {
+
+w[i] = ntohl(w[i]);
+
+}
+
+for(int round = 0; round < 11; round++){
+
+round_keys[round] = _mm_load_si128((const __m128i*)&w[round*4]);
+
+}
+
+
+uint8_t zero_block[16] = {0};
+
+uint8_t H[16];
+
+aes128_encrypt_block(zero_block, round_keys, H);
+
+uint32_t counter = 1;
+
+uint8_t J0[16] = {0};
+
+get_Jn_bytes(J0, iv, counter);
+
+counter++;
+
+uint8_t S[16] = {0};
+
+
+int n = 1;
+
+uint8_t Jn[16] = {0};
+
+uint8_t cipherblock[16] = {0};
+
+for(int i = 0; i<n; i++){
+
+get_Jn_bytes(Jn, iv, counter);
+
+aes128_encrypt_block(Jn, round_keys, cipherblock);
+
+for(int j = 0; j <sizeof cipherblock; j++){
+
+ciphertext[(i*16)+j] = plaintext[(i*16)+j] ^ cipherblock[j];
+
+}
+
+counter++;
+
+if(i==0){
+
+gcm_gf_multiply_x86(S, cipherblock, H);
+
+} else {
+
+for(int i = 0; i<sizeof S;i++){
+
+S[i] ^= cipherblock[i];
+
+}
+
+gcm_gf_multiply_x86(S, S, H);
+
+}
+
+}
+
+// int u = 128 * ceil((float)(16 * 8)/128) - (16 * 8);
+
+uint8_t lenA[8] = {0};
+
+get_uint32_bytes(lenA+4, 0);
+
+uint8_t lenC[8] = {0};
+
+get_uint32_bytes(lenC+4, 16);
+
+uint8_t lenBlock[16];
+
+combine_array(lenBlock, lenA, 8, lenC, 8);
+
+for(int i = 0; i<sizeof S;i++){
+
+S[i] ^= lenBlock[i];
+
+}
+
+gcm_gf_multiply_x86(S, S, H);
+
+
+uint8_t tag[16];
+
+aes128_encrypt_block(S, round_keys, tag);
+
+for(int i = 0; i< sizeof J0; i++){
+
+tag[i] ^= S[i];
+
+}
+
+
+printf("tag: "); print_hex(tag, 16);
+
+} 

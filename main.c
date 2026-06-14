@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <netinet/in.h>
 #include <inttypes.h>
+#include "gcm_core.h"
 // #include <stdlib.h>
 
 static const uint8_t sbox[256] = {
@@ -71,10 +72,14 @@ static const uint8_t invsbox[256] = {
     0x55, 0x21, 0x0c, 0x7d};
 
 // Encrypts a single 16-byte block using pre-expanded round keys
-__m128i aes128_encrypt_block(__m128i plaintext, __m128i* round_keys) {
-    __m128i state = _mm_xor_si128(plaintext, round_keys[0]); // Round 0: Whiten
+__m128i aes128_encrypt_block(uint8_t* plaintext, __m128i* round_keys, uint8_t* ciphertext) {
+    // Load the 16-byte plaintext into a 128-bit register (unaligned load)
+    __m128i state = _mm_loadu_si128((const __m128i*)plaintext);
 
-    // Rounds 1 through 9 use the standard encryption instruction
+    // Round 0: Whiten
+    state = _mm_xor_si128(state, round_keys[0]);
+
+    // Rounds 1 through 9
     state = _mm_aesenc_si128(state, round_keys[1]);
     state = _mm_aesenc_si128(state, round_keys[2]);
     state = _mm_aesenc_si128(state, round_keys[3]);
@@ -85,10 +90,11 @@ __m128i aes128_encrypt_block(__m128i plaintext, __m128i* round_keys) {
     state = _mm_aesenc_si128(state, round_keys[8]);
     state = _mm_aesenc_si128(state, round_keys[9]);
 
-    // Round 10 uses the LAST round instruction (skips the MixColumns step)
+    // Round 10: Last round instruction (skips MixColumns)
     state = _mm_aesenclast_si128(state, round_keys[10]);
 
-    return state;
+    // Store the 128-bit result back into the ciphertext byte array
+    _mm_storeu_si128((__m128i*)ciphertext, state);
 }
 
 uint32_t Word(uint8_t a, uint8_t b, uint8_t c, uint8_t d){
@@ -134,13 +140,149 @@ void key_expansion(uint8_t* key, uint32_t* w, int Nk){
         i += 1;
     }
 }
-
+void combine_array(unsigned char* p, unsigned char* a, int a_len, unsigned char* b, int b_len){
+    for(int i = 0; i<a_len+b_len;i++){
+        p[i] = i<a_len ? a[i] : b[i-a_len]; 
+    }
+}
 void print_hex(unsigned char* a, int aSize){
     for(int i = 0; i<aSize;i++){
         printf("%02X",a[i]);
     }
     printf("\n");
 }
+ void get_uint32_bytes(uint8_t* a, uint32_t b){
+
+uint32_t temp = htonl(b);
+
+memcpy(a, &temp, 4);
+
+}
+
+void get_Jn_bytes(uint8_t* out, uint8_t iv[12], uint32_t counter){
+
+uint8_t counter_array[4];
+
+get_uint32_bytes(counter_array, counter);
+
+combine_array(out, iv, 12, counter_array, 4);
+
+}
+
+void temp_AES_GCM(uint8_t* ciphertext, uint8_t plaintext[16], uint8_t key[16], uint8_t iv[12]){
+
+
+uint32_t w[44] = {0};
+
+key_expansion(key, w, 4);
+
+__m128i round_keys[11] __attribute__((aligned(16)));
+
+for (int i = 0; i < 44; i++) {
+
+w[i] = ntohl(w[i]);
+
+}
+
+for(int round = 0; round < 11; round++){
+
+round_keys[round] = _mm_load_si128((const __m128i*)&w[round*4]);
+
+}
+
+
+uint8_t zero_block[16] = {0};
+
+uint8_t H[16];
+
+aes128_encrypt_block(zero_block, round_keys, H);
+
+uint32_t counter = 1;
+
+uint8_t J0[16] = {0};
+
+get_Jn_bytes(J0, iv, counter);
+
+counter++;
+
+uint8_t S[16] = {0};
+
+
+int n = 1;
+
+uint8_t Jn[16] = {0};
+
+uint8_t cipherblock[16] = {0};
+
+for(int i = 0; i<n; i++){
+
+get_Jn_bytes(Jn, iv, counter);
+
+aes128_encrypt_block(Jn, round_keys, cipherblock);
+
+for(int j = 0; j <sizeof cipherblock; j++){
+
+ciphertext[(i*16)+j] = plaintext[(i*16)+j] ^ cipherblock[j];
+
+}
+
+counter++;
+
+if(i==0){
+
+gcm_gf_multiply_x86(S, cipherblock, H);
+
+} else {
+
+for(int i = 0; i<sizeof S;i++){
+
+S[i] ^= cipherblock[i];
+
+}
+
+gcm_gf_multiply_x86(S, S, H);
+
+}
+
+}
+
+// int u = 128 * ceil((float)(16 * 8)/128) - (16 * 8);
+
+uint8_t lenA[8] = {0};
+
+get_uint32_bytes(lenA+4, 0);
+
+uint8_t lenC[8] = {0};
+
+get_uint32_bytes(lenC+4, 16);
+
+uint8_t lenBlock[16];
+
+combine_array(lenBlock, lenA, 8, lenC, 8);
+
+for(int i = 0; i<sizeof S;i++){
+
+S[i] ^= lenBlock[i];
+
+}
+
+gcm_gf_multiply_x86(S, S, H);
+
+
+uint8_t tag[16];
+
+aes128_encrypt_block(S, round_keys, tag);
+
+for(int i = 0; i< sizeof J0; i++){
+
+tag[i] ^= S[i];
+
+}
+
+
+printf("tag: "); print_hex(tag, 16);
+
+} 
 int main(){
 
     uint8_t key[16] = {0x2b, 0x7e, 0x15, 0x16, 0x28, 0xae, 0xd2, 0xa6,

@@ -149,34 +149,12 @@ int main(){
     int Nk = 4;
     uint8_t rcon[] = {0x01, 0x02, 0x04, 0x08, 0x10,
                       0x20, 0x40, 0x80, 0x1b, 0x36};
-    // tests
-    if(1){
-        int i = 4;
-        uint32_t temp;
-        switch(i){
-            case 4:
-                temp = 0x09cf4f3c;
-                break;
-             case 5:
-                temp = 0xa0fafe17;
-                break;
-            case 8:
-                temp = 0x2a6c7605;
-                break;
-        }
-        // printf("temp before = %" PRIx32 "\n", temp);
-        // printf("temp rotWord = %" PRIx32 "\n", RotWord(temp));
-        // printf("temp subWord = %" PRIx32 "\n", SubWord(RotWord(temp)));
-        // printf("temp Rcon = %" PRIx32 "\n", ((uint32_t)rcon[(i/Nk) - 1] << 24));
-        // printf("w[i-Nk] = %" PRIx32 "\n", w[i-Nk]);
 
-        // temp = SubWord(RotWord(temp));
-        // temp ^= ((uint32_t)rcon[(i/Nk) - 1] << 24);
-        // w[i] = w[i-Nk] ^ temp;
 
-        key_expansion(key, w, Nk);
+    __m128i round_keys[11] __attribute__((aligned(16)));
 
-        printf("w[i] = %" PRIx32 "\n", w[43]);
+    for(int round = 0; round < 11; round++){
+        round_keys[round] = _mm_load_si128((const __m128i*)&w[round*4]);
     }
 
     return 0;

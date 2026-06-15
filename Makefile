@@ -1,4 +1,4 @@
-CFLAGS= -O3 -maes -msse4 -mpclmul -lsodium -lm
+CFLAGS= -O3 -maes -msse4 -mpclmul -lsodium -lm -march=native
 FLAGS= 
 CC=gcc
 TARGET=main

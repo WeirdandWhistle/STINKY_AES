@@ -1,3 +1,4 @@
+#include <tmmintrin.h>
 #include <wmmintrin.h> // Header for Intel/AMD AES-NI intrinsics
 #include <emmintrin.h> // Header for SSE2 (__m128i data type)
 #include "main.h"
@@ -322,7 +323,7 @@ int main(){
 
 
     // benchmark
-    if(0){
+    if(1){
         long data_len = 1 * 1000 * 1000 * 1000;
         uint8_t* data = malloc(data_len);
         memset(data, 5, data_len);
@@ -336,26 +337,31 @@ int main(){
         printf("----- %f ------\n",dif_time);
     }
     // gcm testing
-    if(1){
+    if(0){
         printf("----- GCM MATH TESTING ------\n");
         if(1){
-            uint8_t X[16] = {1};
+            uint8_t X[16] = {1,2,3,4,5,6,7,8,9,0};
             uint8_t Y[16] = {1};
             uint8_t out1[16] = {0};
+
+            __m128i reverse_mask = _mm_set_epi8(0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15);
 
             __m128i Xreg = _mm_loadu_si128((__m128i*)X);
             __m128i Yreg = _mm_loadu_si128((__m128i*)Y);
             __m128i outReg;
 
+            Xreg = _mm_shuffle_epi8(Xreg, reverse_mask);
+            Yreg = _mm_shuffle_epi8(Yreg, reverse_mask);
+
             gfmul(Xreg, Yreg, &outReg);
 
-            _mm_storeu_si128((__m128i*)out1, outReg);
-            reverse_16array(out1);
+            outReg = _mm_shuffle_epi8(outReg, reverse_mask);
+            _mm_storeu_si128((__m128i*)out1, outReg);            
 
             printf("out1 "); print_hex(out1, 16);
         }
         if(1){
-            uint8_t X[16] = {1};
+            uint8_t X[16] = {1,2,3,4,5,6,7,8,9,0};
             uint8_t Y[16] = {1};
             uint8_t out2[16] = {0};
 

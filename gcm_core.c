@@ -62,13 +62,16 @@ void print_hexs(unsigned char* a, int aSize){
 }
 void gcm_gf_multiply_x86(uint8_t* out, uint8_t *X, const uint8_t *Y){
 
-    // __m128i Xreg = _mm_loadu_si128((__m128i*)X);
-    // __m128i Yreg = _mm_loadu_si128((__m128i*)Y);
-    // __m128i outReg;
-
-    // gfmul(Xreg, Yreg, &outReg);
-
-    // _mm_storeu_si128((__m128i*)out, outReg);
+    __m128i Xreg = _mm_loadu_si128((__m128i*)X);
+    __m128i Yreg = _mm_loadu_si128((__m128i*)Y);
+    __m128i outReg;
+    __m128i reverse_mask = _mm_set_epi8(0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15);
+    Xreg = _mm_shuffle_epi8(Xreg, reverse_mask);
+    Yreg = _mm_shuffle_epi8(Yreg, reverse_mask);
+    gfmul(Xreg, Yreg, &outReg);
+    outReg = _mm_shuffle_epi8(outReg, reverse_mask);
+    _mm_storeu_si128((__m128i*)out, outReg);
+    return;
 
     uint8_t V[16] = {0};
     memcpy(V, Y, 16);

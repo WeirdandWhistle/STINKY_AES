@@ -47,7 +47,7 @@ static const uint8_t sbox[256] = {
 
 /* Function written entirly by AI:
 Encrypts a single 16-byte block using pre-expanded round keys */
-__m128i aes128_encrypt_block(uint8_t* plaintext, __m128i* round_keys, uint8_t* ciphertext) {
+void aes128_encrypt_block(uint8_t* plaintext, __m128i* round_keys, uint8_t* ciphertext) {
     // Load the 16-byte plaintext into a 128-bit register (unaligned load)
     __m128i state = _mm_loadu_si128((const __m128i*)plaintext);
 
@@ -308,7 +308,7 @@ int s_aes_128_gcm_decrypt(uint8_t* plaintext, uint8_t* ad, int ad_len, uint8_t* 
     }
     if(extra_ciphertext){
         uint8_t extrablock[16] = {0};
-        memcpy(extrablock, ciphertext+(n*16), 16);
+        memcpy(extrablock, ciphertext+(n*16), extra_ciphertext);
         
         get_Jn_bytes(Jn, iv, counter);
         aes128_encrypt_block(Jn, round_keys, cipherblock);
@@ -326,6 +326,7 @@ int s_aes_128_gcm_decrypt(uint8_t* plaintext, uint8_t* ad, int ad_len, uint8_t* 
         #endif
         gcm_gf_multiply(S, S, H);
     }
+    printf("S: "); print_hex(S, 16);
 
     uint8_t lenA[8] = {0};
     get_uint32_bytes(lenA+4, ad_len*8);
@@ -346,7 +347,7 @@ int s_aes_128_gcm_decrypt(uint8_t* plaintext, uint8_t* ad, int ad_len, uint8_t* 
 
     gcm_gf_multiply(S, S, H);
 
-    uint8_t T[16];
+    uint8_t T[16] = {0};
     aes128_encrypt_block(J0, round_keys, T);
 
     #if defined(HARDWARE_SPEED)
@@ -362,6 +363,9 @@ int s_aes_128_gcm_decrypt(uint8_t* plaintext, uint8_t* ad, int ad_len, uint8_t* 
     for(int i = 0; i<16;i++){
         notEqual |= (tag[i] ^ T[i]);
     }
+
+    print_hex(T, 16);
+    print_hex(tag, 16);
 
     return notEqual;
 }
@@ -391,7 +395,7 @@ int main(){
     uint8_t temp[sizeof plaintext] = {0};
     assert(s_aes_128_gcm_decrypt(temp, ad, sizeof ad, ciphertext, sizeof ciphertext, tag, key, iv)==0);
 
-    printf("plaintext\nabcd1028743610923784610275861307580834765028374506\n"); print_hex(plaintext, sizeof plaintext);
+    // printf("plaintext\nabcd1028743610923784610275861307580834765028374506\n"); print_hex(plaintext, sizeof plaintext);
 
     return 0;
 }

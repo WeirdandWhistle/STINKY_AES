@@ -1,24 +1,79 @@
 // DISCLAIMER:
-// WRITTEN ENTIRELY BY AI
+// WRITTEN ENTIRELY BY STUIPID HOOMAN
 
 
 #include <stdint.h>
+#include <stdio.h>
 #include <string.h>
-#include <wmmintrin.h> // PCLMUL
-#include <emmintrin.h>
-#include <tmmintrin.h> // _mm_shuffle_epi8
+// #include <wmmintrin.h> // PCLMUL
+// #include <emmintrin.h>
+// #include <immintrin.h>
+// #include <tmmintrin.h> // _mm_shuffle_epi8
 #include <math.h>
 
+#include <wmmintrin.h>
+#include <emmintrin.h>
+#include <smmintrin.h>
 
+void gfmul (__m128i a, __m128i b, __m128i *res){
+__m128i tmp0, tmp1, tmp2, tmp3, tmp4, tmp5, tmp6, tmp7, tmp8, tmp9;
+tmp3 = _mm_clmulepi64_si128(a, b, 0x00);
+tmp4 = _mm_clmulepi64_si128(a, b, 0x10);
+tmp5 = _mm_clmulepi64_si128(a, b, 0x01);
+tmp6 = _mm_clmulepi64_si128(a, b, 0x11);
+tmp4 = _mm_xor_si128(tmp4, tmp5);
+tmp5 = _mm_slli_si128(tmp4, 8);
+tmp4 = _mm_srli_si128(tmp4, 8);
+tmp3 = _mm_xor_si128(tmp3, tmp5);
+tmp6 = _mm_xor_si128(tmp6, tmp4);
+tmp7 = _mm_srli_epi32(tmp3, 31);
+tmp8 = _mm_srli_epi32(tmp6, 31);
+tmp3 = _mm_slli_epi32(tmp3, 1);
+tmp6 = _mm_slli_epi32(tmp6, 1);
+tmp9 = _mm_srli_si128(tmp7, 12);
+tmp8 = _mm_slli_si128(tmp8, 4);
+tmp7 = _mm_slli_si128(tmp7, 4);
+tmp3 = _mm_or_si128(tmp3, tmp7);
+tmp6 = _mm_or_si128(tmp6, tmp8);
+tmp6 = _mm_or_si128(tmp6, tmp9);
+tmp7 = _mm_slli_epi32(tmp3, 31);
+tmp8 = _mm_slli_epi32(tmp3, 30);
+tmp9 = _mm_slli_epi32(tmp3, 25);
+tmp7 = _mm_xor_si128(tmp7, tmp8);
+tmp7 = _mm_xor_si128(tmp7, tmp9);
+tmp8 = _mm_srli_si128(tmp7, 4);
+tmp7 = _mm_slli_si128(tmp7, 12);
+tmp3 = _mm_xor_si128(tmp3, tmp7);
+tmp2 = _mm_srli_epi32(tmp3, 1);
+tmp4 = _mm_srli_epi32(tmp3, 2);
+tmp5 = _mm_srli_epi32(tmp3, 7);
+tmp2 = _mm_xor_si128(tmp2, tmp4);
+tmp2 = _mm_xor_si128(tmp2, tmp5);
+tmp2 = _mm_xor_si128(tmp2, tmp8);
+tmp3 = _mm_xor_si128(tmp3, tmp2);
+tmp6 = _mm_xor_si128(tmp6, tmp3);
+*res = tmp6;
+}
+void print_hexs(unsigned char* a, int aSize){
+    for(int i = 0; i<aSize;i++){
+        printf("%02X",a[i]);
+    }
+    printf("\n");
+}
 void gcm_gf_multiply_x86(uint8_t* out, uint8_t *X, const uint8_t *Y){
+
+    // __m128i Xreg = _mm_loadu_si128((__m128i*)X);
+    // __m128i Yreg = _mm_loadu_si128((__m128i*)Y);
+    // __m128i outReg;
+
+    // gfmul(Xreg, Yreg, &outReg);
+
+    // _mm_storeu_si128((__m128i*)out, outReg);
+
     uint8_t V[16] = {0};
     memcpy(V, Y, 16);
 
     uint8_t Z[16] = {0};
-
-    // uint8_t R[16] = {0};
-    // memset(R, 0, 16);
-    // R[0] = 0xE1; // 11100001
 
     for(int i = 0; i<128; i++){
         int xBit = (X[i/8] >> (7 - (i%8))) & 0x1; // 11001101 & 00000001
@@ -27,7 +82,6 @@ void gcm_gf_multiply_x86(uint8_t* out, uint8_t *X, const uint8_t *Y){
                 Z[j] ^= V[j];
             }
         }
-        // uint8_t vBit = V[15] & 0x01; // 00000001
         uint8_t carry = 0; 
         for(int j = 0; j<16; j++){
             uint8_t next_carry = V[j] & 0x01;
@@ -36,209 +90,11 @@ void gcm_gf_multiply_x86(uint8_t* out, uint8_t *X, const uint8_t *Y){
         }
         if(carry){
             V[0] ^= 0xE1;
-        }
-        
+        }        
     }
     memcpy(out, Z, 16);
+    // int same = memcmp(out, Z, 16);
+    // printf("same %d\n", same);
+    // printf("cool: "); print_hexs(out, 16);
+    // printf("slow: "); print_hexs(Z, 16);
 }
-
-// // Helper function to shift a 16-byte block right by 1 bit.
-// // Returns the bit that fell off the right side (LSB of the last byte).
-// static uint8_t shift_right_1(uint8_t *V) {
-//     uint8_t carry = 0;
-//     for (int i = 0; i < 16; i++) {
-//         uint8_t next_carry = V[i] & 0x01;
-//         V[i] = (V[i] >> 1) | (carry << 7);
-//         carry = next_carry;
-//     }
-//     return carry;
-// }
-
-// void gcm_gf_multiply_x86(uint8_t* out, uint8_t *X, const uint8_t *H) {
-//     // Z will accumulate the result, initialized to 0
-//     uint8_t Z[16] = {0};
-    
-//     // V is initialized to H
-//     uint8_t V[16];
-//     memcpy(V, H, 16);
-
-//     // GCM reduction polynomial constant in bit-reflected form: 0xE1
-//     // Representing: x^128 + x^7 + x^2 + x + 1
-//     const uint8_t R = 0xE1;
-
-//     // Loop through all 128 bits of X (16 bytes * 8 bits)
-//     for (int i = 0; i < 16; i++) {
-//         uint8_t byte_X = X[i];
-        
-//         for (int bit = 0; bit < 8; bit++) {
-//             // Check if the highest-order bit remaining in the byte is 1
-//             // (GCM counts bits from left-to-right: MSB of byte 0 is bit 0)
-//             if (byte_X & (0x80 >> bit)) {
-//                 // Z = Z XOR V
-//                 for (int j = 0; j < 16; j++) {
-//                     Z[j] ^= V[j];
-//                 }
-//             }
-
-//             // Step V forward: V = V >> 1.
-//             // If a 1 bit falls off the right side, XOR the high byte with the reduction polynomial.
-//             if (shift_right_1(V)) {
-//                 V[0] ^= R;
-//             }
-//         }
-//     }
-
-//     // Copy the accumulated result to the output buffer
-//     memcpy(out, Z, 16);
-// }
-
-// /**
-//  * Performs a 128-bit Galois Field multiplication (X = X * H) 
-//  * optimized for Intel/AMD processors using the PCLMULQDQ instruction.
-//  * * @param X The 16-byte data block to be multiplied (modified in place)
-//  * @param H The 16-byte GCM Hash Key (remains constant)
-//  */
-// void gcm_gf_multiply_x86(uint8_t* out, uint8_t *X, const uint8_t *H) {
-//     // 1. Load X and H into 128-bit SSE registers.
-//     // We use unaligned loads (_mm_loadu_si128) because network/crypto buffers 
-//     // are rarely 16-byte aligned in memory.
-//     __m128i x_reg = _mm_loadu_si128((const __m128i*)X);
-//     __m128i h_reg = _mm_loadu_si128((const __m128i*)H);
-
-//     // GCM Bit-Reversal Reality Check: Intel CLMUL operates on standard little-endian integers.
-//     // However, GCM defines its bits in a "reflected" structure. To make standard CLMUL 
-//     // match the NIST SP 800-38D specification, we must reflect the bits, or use a 
-//     // mathematically equivalent "reflected reduction" method. 
-//     // The sequence below handles the standard GCM reflected multiplication:
-
-//     // 2. Perform the carry-less multiplication of X and H
-//     // This yields a 256-bit result split across two 128-bit registers (tmp1 and tmp2)
-//     __m128i tmp1 = _mm_clmulepi64_si128(x_reg, h_reg, 0x00); // Low 64 bits of X * Low 64 bits of H
-//     __m128i tmp4 = _mm_clmulepi64_si128(x_reg, h_reg, 0x11); // High 64 bits of X * High 64 bits of H
-//     __m128i tmp2 = _mm_clmulepi64_si128(x_reg, h_reg, 0x10); // High 64 bits of X * Low 64 bits of H
-//     __m128i tmp3 = _mm_clmulepi64_si128(x_reg, h_reg, 0x01); // Low 64 bits of X * High 64 bits of H
-
-//     // Combine the cross-multiplications
-//     tmp2 = _mm_xor_si128(tmp2, tmp3);
-    
-//     // Split the 256-bit product into a high 128-bit register and a low 128-bit register
-//     __m128i product_low  = _mm_xor_si128(tmp1, _mm_slli_si128(tmp2, 8));
-//     __m128i product_high = _mm_xor_si128(tmp4, _mm_srli_si128(tmp2, 8));
-
-//     // 3. Fast Reduction modulo the GCM polynomial (0xE100000000000000)
-//     // This folds the 256-bit product back down to a 128-bit authenticated chunk.
-//     __m128i a, b, c;
-    
-//     a = _mm_srli_epi32(product_low, 31);
-//     b = _mm_srli_epi32(product_low, 30);
-//     c = _mm_srli_epi32(product_low, 25);
-    
-//     a = _mm_xor_si128(a, b);
-//     a = _mm_xor_si128(a, c);
-    
-//     b = _mm_slli_si128(a, 4);
-//     c = _mm_srli_si128(a, 12);
-    
-//     product_low  = _mm_xor_si128(product_low, b);
-//     product_high = _mm_xor_si128(product_high, c);
-    
-//     a = _mm_slli_epi32(product_low, 1);
-//     b = _mm_slli_epi32(product_low, 2);
-//     c = _mm_slli_epi32(product_low, 7);
-    
-//     a = _mm_xor_si128(a, b);
-//     a = _mm_xor_si128(a, c);
-    
-//     __m128i result = _mm_xor_si128(product_high, a);
-//     result = _mm_xor_si128(result, product_low);
-
-//     // 4. Store the result back into your buffer
-//     _mm_storeu_si128((__m128i*)out, result);
-// }
-
-
-// Reverse bytes in a 128-bit vector (16 bytes) using PSHUFB
-static inline __m128i byteswap128(__m128i x) {
-    const __m128i shuf = _mm_setr_epi8(
-        15,14,13,12,11,10,9,8,7,6,5,4,3,2,1,0
-    );
-    return _mm_shuffle_epi8(x, shuf);
-}
-
-// // Multiply X * H in GF(2^128) and return the 128-bit result in 'out'.
-// // Inputs/outputs are in the standard GCM byte order (most significant byte first).
-// void gcm_gf_multiply_x86(uint8_t out[16], const uint8_t X[16], const uint8_t H[16]) {
-//     // Load and byte-swap to little-endian lane order for CLMUL interpretations.
-//     __m128i x = _mm_loadu_si128((const __m128i*)X);
-//     __m128i h = _mm_loadu_si128((const __m128i*)H);
-//     x = byteswap128(x);
-//     h = byteswap128(h);
-
-//     // Split and do 64x64 CLMULs
-//     __m128i x_lo_hi = x; // lanes: [hi64 | lo64]
-//     __m128i h_lo_hi = h;
-
-//     __m128i x0 = _mm_clmulepi64_si128(x_lo_hi, h_lo_hi, 0x00); // lo(x)*lo(h)
-//     __m128i x1 = _mm_clmulepi64_si128(x_lo_hi, h_lo_hi, 0x01); // lo(x)*hi(h)
-//     __m128i x2 = _mm_clmulepi64_si128(x_lo_hi, h_lo_hi, 0x10); // hi(x)*lo(h)
-//     __m128i x3 = _mm_clmulepi64_si128(x_lo_hi, h_lo_hi, 0x11); // hi(x)*hi(h)
-
-//     // middle = x1 ^ x2
-//     __m128i middle = _mm_xor_si128(x1, x2);
-
-//     // shift middle by 64 bits to combine into 256-bit product
-//     // product_low  = x0 ^ (middle << 64)
-//     // product_high = x3 ^ (middle >> 64)
-//     __m128i middle_lo_shift = _mm_slli_si128(middle, 8);  // <<64 bits
-//     __m128i middle_hi_shift = _mm_srli_si128(middle, 8);  // >>64 bits
-
-//     __m128i product_low  = _mm_xor_si128(x0, middle_lo_shift);
-//     __m128i product_high = _mm_xor_si128(x3, middle_hi_shift);
-
-//     // Now reduce the 256-bit product modulo the GCM polynomial:
-//     // P(x) = x^128 + x^7 + x^2 + x + 1  (reduction constant R = 0xE1 << 120)
-//     //
-//     // Reduction strategy:
-//     // Let V = product_high (128 bits) and U = product_low (128 bits).
-//     // We need to fold V into U: compute U ^ (V * (x^128 mod P))
-//     // Use carry-less multiply to multiply V by the constant R' that encodes reduction.
-//     //
-//     // Implement using technique from Intel/OpenSSL: compute
-//     //   t1 = CLMUL(V, R_low)
-//     //   then fold t1 into U with shifts/xors.
-//     //
-//     // We'll follow a compact known-correct sequence.
-
-//     // Precompute constant: 0xe1000000000000000000000000000000 (big-endian)
-//     // In little-endian 128-bit lane order for CLMUL, store as byteswapped:
-//     const __m128i R = _mm_setr_epi8(
-//         0x00,0x00,0x00,0x00,0x00,0x00,0x00,0x00,
-//         0x00,0x00,0x00,0x00,0x00,0x00,0x00,(char)0xE1
-//     );
-//     // Note: we use two CLMULs to reduce V.
-//     __m128i v = product_high;
-
-//     // Multiply lower and higher 64-bit parts of v by R (as per reduction)
-//     __m128i v_lo = _mm_clmulepi64_si128(v, R, 0x00); // lo(v) * lo(R)
-//     __m128i v_hi = _mm_clmulepi64_si128(v, R, 0x10); // hi(v) * lo(R)
-
-//     // Combine v_lo and v_hi (they overlap by 64 bits)
-//     __m128i t = _mm_xor_si128(v_lo, _mm_slli_si128(v_hi, 8)); // intermediate
-
-//     // Now fold t into product_low
-//     __m128i res = _mm_xor_si128(product_low, t);
-
-//     // There remains possible high bits from the multiplication; one more folding step:
-//     // Extract high 64 bits of t, multiply by R constant again and xor into res.
-//     __m128i t_hi_shift = _mm_srli_si128(t, 8); // >>64
-//     __m128i t2_lo = _mm_clmulepi64_si128(t_hi_shift, R, 0x00);
-//     __m128i t2_hi = _mm_clmulepi64_si128(t_hi_shift, R, 0x10);
-//     __m128i t2 = _mm_xor_si128(t2_lo, _mm_slli_si128(t2_hi, 8));
-
-//     res = _mm_xor_si128(res, t2);
-
-//     // At this point res holds the reduced value in little-endian lane order.
-//     // Byte-swap back to big-endian (GCM standard) and store.
-//     res = byteswap128(res);
-//     _mm_storeu_si128((__m128i*)out, res);
-// }

@@ -8,6 +8,7 @@
 #include <inttypes.h>
 #include "gcm_core.h"
 #include <sodium.h>
+#include <time.h>
 #include <math.h>
 // #include <stdlib.h>
 
@@ -293,6 +294,14 @@ void from_hex(uint8_t* out, char* in, int len){
     size_t outlen;
     sodium_hex2bin(out, len/2, in, len, NULL, &outlen, NULL);
 }
+void reverse_16array(uint8_t* arr){
+    uint8_t temp;
+    for(int i = 0; i<8; i++){
+        temp = arr[i];
+        arr[i] = arr[15-i];
+        arr[15-i] = temp;
+    }
+}
 int main(){
 
     uint8_t key[16] = {0};
@@ -309,6 +318,52 @@ int main(){
     temp_AES_GCM(ciphertext, plaintext, sizeof plaintext, ad, sizeof ad, key, iv);
 
     printf("ciphertext: "); print_hex(ciphertext, sizeof ciphertext);
+
+
+
+    // benchmark
+    if(0){
+        long data_len = 1 * 1000 * 1000 * 1000;
+        uint8_t* data = malloc(data_len);
+        memset(data, 5, data_len);
+        uint8_t* des = malloc(data_len);
+        
+        float start_time = (float)clock()/CLOCKS_PER_SEC;
+
+        temp_AES_GCM(des, data, data_len, NULL, 0, key, iv);
+
+        float dif_time = ((float)clock()/CLOCKS_PER_SEC) - start_time;
+        printf("----- %f ------\n",dif_time);
+    }
+    // gcm testing
+    if(1){
+        printf("----- GCM MATH TESTING ------\n");
+        if(1){
+            uint8_t X[16] = {1};
+            uint8_t Y[16] = {1};
+            uint8_t out1[16] = {0};
+
+            __m128i Xreg = _mm_loadu_si128((__m128i*)X);
+            __m128i Yreg = _mm_loadu_si128((__m128i*)Y);
+            __m128i outReg;
+
+            gfmul(Xreg, Yreg, &outReg);
+
+            _mm_storeu_si128((__m128i*)out1, outReg);
+            reverse_16array(out1);
+
+            printf("out1 "); print_hex(out1, 16);
+        }
+        if(1){
+            uint8_t X[16] = {1};
+            uint8_t Y[16] = {1};
+            uint8_t out2[16] = {0};
+
+            gcm_gf_multiply_x86(out2, X, Y);
+
+            printf("out2 "); print_hex(out2, 16);
+        }
+    }
 
     return 0;
 }

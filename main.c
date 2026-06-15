@@ -175,6 +175,7 @@ void temp_AES_GCM(uint8_t* ciphertext, uint8_t plaintext[16], uint8_t key[16], u
     }
 
     uint8_t zero_block[16] = {0};
+    memset(zero_block, 0, sizeof zero_block);
     uint8_t H[16];
     aes128_encrypt_block(zero_block, round_keys, H);
 
@@ -196,11 +197,12 @@ void temp_AES_GCM(uint8_t* ciphertext, uint8_t plaintext[16], uint8_t key[16], u
         }
         counter++;
         if(i==0){
-            gcm_gf_multiply_x86(S, cipherblock, H);
+            gcm_gf_multiply_x86(S, ciphertext, H);
         } else {
-        for(int i = 0; i<sizeof S;i++){
-            S[i] ^= cipherblock[i];
-        }
+            printf("else block for s");
+            for(int i = 0; i<sizeof S;i++){
+                S[i] ^= cipherblock[i];
+            }
         gcm_gf_multiply_x86(S, S, H);
         }    
     }
@@ -230,7 +232,7 @@ void temp_AES_GCM(uint8_t* ciphertext, uint8_t plaintext[16], uint8_t key[16], u
         tag[i] ^= S[i];
     }
 
-    printf("tag:       "); print_hex(tag, 16);
+    printf("tag:        "); print_hex(tag, 16);
 
 }
 void from_hex(uint8_t* out, char* in, int len){
@@ -250,7 +252,7 @@ int main(){
 
     temp_AES_GCM(ciphertext, plaintext, key, iv);
 
-    printf("ciphertext:"); print_hex(ciphertext, 16);
+    printf("ciphertext: "); print_hex(ciphertext, 16);
 
     return 0;
 }

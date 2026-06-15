@@ -1,15 +1,13 @@
 #include <wmmintrin.h> // Header for Intel/AMD AES-NI intrinsics
 #include <emmintrin.h> // Header for SSE2 (__m128i data type)
-#include "main.h"
 #include <string.h>
 
 #include <stdio.h>
 #include <netinet/in.h>
 #include <inttypes.h>
-#include "gcm_core.h"
 #include <sodium.h>
 #include <math.h>
-// #include <stdlib.h>
+#include "stinky_aes_128_gcm_encrypt.h"
 
 static const uint8_t sbox[256] = {
     0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5, 0x30,
@@ -98,7 +96,37 @@ __m128i aes128_encrypt_block(uint8_t* plaintext, __m128i* round_keys, uint8_t* c
     // Store the 128-bit result back into the ciphertext byte array
     _mm_storeu_si128((__m128i*)ciphertext, state);
 }
+void gcm_gf_multiply_x86(uint8_t* out, uint8_t *X, const uint8_t *Y){
+    uint8_t V[16] = {0};
+    memcpy(V, Y, 16);
 
+    uint8_t Z[16] = {0};
+
+    // uint8_t R[16] = {0};
+    // memset(R, 0, 16);
+    // R[0] = 0xE1; // 11100001
+
+    for(int i = 0; i<128; i++){
+        int xBit = (X[i/8] >> (7 - (i%8))) & 0x1; // 11001101 & 00000001
+        if(xBit){
+            for(int j = 0; j <sizeof Z; j++){
+                Z[j] ^= V[j];
+            }
+        }
+        // uint8_t vBit = V[15] & 0x01; // 00000001
+        uint8_t carry = 0; 
+        for(int j = 0; j<16; j++){
+            uint8_t next_carry = V[j] & 0x01;
+            V[j] = (V[j] >> 1) | (carry << 7);
+            carry = next_carry;
+        }
+        if(carry){
+            V[0] ^= 0xE1;
+        }
+        
+    }
+    memcpy(out, Z, 16);
+}
 uint32_t Word(uint8_t a, uint8_t b, uint8_t c, uint8_t d){
     return (a<<24) | (b<<16) | (c<<8) | (d);
 }
@@ -292,23 +320,4 @@ void temp_AES_GCM(uint8_t* ciphertext, uint8_t* plaintext, int plaintext_length,
 void from_hex(uint8_t* out, char* in, int len){
     size_t outlen;
     sodium_hex2bin(out, len/2, in, len, NULL, &outlen, NULL);
-}
-int main(){
-
-    uint8_t key[16] = {0};
-    from_hex(key, "00112233445566778899aabbccddeeff",32);
-    uint8_t iv[12] = {0};
-    from_hex(iv, "abcdef12345678901f2f3f4f",24);
-    uint8_t ad[25] = {};
-    from_hex(ad, "abcd1028743610923784610275861307580834765028374506", sizeof(ad)*2);
-    uint8_t plaintext[25] = {0};
-    from_hex(plaintext, "abcd1028743610923784610275861307580834765028374506",sizeof(plaintext)*2);
-
-    uint8_t ciphertext[sizeof plaintext] = {0};
-
-    temp_AES_GCM(ciphertext, plaintext, sizeof plaintext, ad, sizeof ad, key, iv);
-
-    printf("ciphertext: "); print_hex(ciphertext, sizeof ciphertext);
-
-    return 0;
 }

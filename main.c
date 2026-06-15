@@ -44,38 +44,8 @@ static const uint8_t sbox[256] = {
     0x0d, 0xbf, 0xe6, 0x42, 0x68, 0x41, 0x99, 0x2d, 0x0f,
     0xb0, 0x54, 0xbb, 0x16};
 
-static const uint8_t invsbox[256] = {
-    0x52, 0x09, 0x6a, 0xd5, 0x30, 0x36, 0xa5, 0x38, 0xbf,
-    0x40, 0xa3, 0x9e, 0x81, 0xf3, 0xd7, 0xfb, 0x7c, 0xe3,
-    0x39, 0x82, 0x9b, 0x2f, 0xff, 0x87, 0x34, 0x8e, 0x43,
-    0x44, 0xc4, 0xde, 0xe9, 0xcb, 0x54, 0x7b, 0x94, 0x32,
-    0xa6, 0xc2, 0x23, 0x3d, 0xee, 0x4c, 0x95, 0x0b, 0x42,
-    0xfa, 0xc3, 0x4e, 0x08, 0x2e, 0xa1, 0x66, 0x28, 0xd9,
-    0x24, 0xb2, 0x76, 0x5b, 0xa2, 0x49, 0x6d, 0x8b, 0xd1,
-    0x25, 0x72, 0xf8, 0xf6, 0x64, 0x86, 0x68, 0x98, 0x16,
-    0xd4, 0xa4, 0x5c, 0xcc, 0x5d, 0x65, 0xb6, 0x92, 0x6c,
-    0x70, 0x48, 0x50, 0xfd, 0xed, 0xb9, 0xda, 0x5e, 0x15,
-    0x46, 0x57, 0xa7, 0x8d, 0x9d, 0x84, 0x90, 0xd8, 0xab,
-    0x00, 0x8c, 0xbc, 0xd3, 0x0a, 0xf7, 0xe4, 0x58, 0x05,
-    0xb8, 0xb3, 0x45, 0x06, 0xd0, 0x2c, 0x1e, 0x8f, 0xca,
-    0x3f, 0x0f, 0x02, 0xc1, 0xaf, 0xbd, 0x03, 0x01, 0x13,
-    0x8a, 0x6b, 0x3a, 0x91, 0x11, 0x41, 0x4f, 0x67, 0xdc,
-    0xea, 0x97, 0xf2, 0xcf, 0xce, 0xf0, 0xb4, 0xe6, 0x73,
-    0x96, 0xac, 0x74, 0x22, 0xe7, 0xad, 0x35, 0x85, 0xe2,
-    0xf9, 0x37, 0xe8, 0x1c, 0x75, 0xdf, 0x6e, 0x47, 0xf1,
-    0x1a, 0x71, 0x1d, 0x29, 0xc5, 0x89, 0x6f, 0xb7, 0x62,
-    0x0e, 0xaa, 0x18, 0xbe, 0x1b, 0xfc, 0x56, 0x3e, 0x4b,
-    0xc6, 0xd2, 0x79, 0x20, 0x9a, 0xdb, 0xc0, 0xfe, 0x78,
-    0xcd, 0x5a, 0xf4, 0x1f, 0xdd, 0xa8, 0x33, 0x88, 0x07,
-    0xc7, 0x31, 0xb1, 0x12, 0x10, 0x59, 0x27, 0x80, 0xec,
-    0x5f, 0x60, 0x51, 0x7f, 0xa9, 0x19, 0xb5, 0x4a, 0x0d,
-    0x2d, 0xe5, 0x7a, 0x9f, 0x93, 0xc9, 0x9c, 0xef, 0xa0,
-    0xe0, 0x3b, 0x4d, 0xae, 0x2a, 0xf5, 0xb0, 0xc8, 0xeb,
-    0xbb, 0x3c, 0x83, 0x53, 0x99, 0x61, 0x17, 0x2b, 0x04,
-    0x7e, 0xba, 0x77, 0xd6, 0x26, 0xe1, 0x69, 0x14, 0x63,
-    0x55, 0x21, 0x0c, 0x7d};
-
-// Encrypts a single 16-byte block using pre-expanded round keys
+/* Function written entirly by AI:
+Encrypts a single 16-byte block using pre-expanded round keys */
 __m128i aes128_encrypt_block(uint8_t* plaintext, __m128i* round_keys, uint8_t* ciphertext) {
     // Load the 16-byte plaintext into a 128-bit register (unaligned load)
     __m128i state = _mm_loadu_si128((const __m128i*)plaintext);
@@ -166,7 +136,7 @@ void get_Jn_bytes(uint8_t* out, uint8_t iv[12], uint32_t counter){
     combine_array(out, iv, 12, counter_array, 4);
 }
 
-void temp_AES_GCM(uint8_t* ciphertext, uint8_t* plaintext, int plaintext_length, uint8_t* ad, int ad_len, uint8_t key[16], uint8_t iv[12]){
+void s_aes_128_gcm_encypt(uint8_t* ciphertext, uint8_t tag[16], uint8_t* plaintext, int plaintext_length, uint8_t* ad, int ad_len, uint8_t key[16], uint8_t iv[12]){
     uint32_t w[44] = {0};
     key_expansion(key, w, 4);
     __m128i round_keys[11] __attribute__((aligned(16)));
@@ -191,34 +161,23 @@ void temp_AES_GCM(uint8_t* ciphertext, uint8_t* plaintext, int plaintext_length,
     int n = plaintext_length / 16;
     uint8_t Jn[16] = {0};
     uint8_t cipherblock[16] = {0};
-    uint8_t sStarted = 0;
 
     if(ad_len){
         int adBlocks = ad_len / 16;
         uint8_t extraAD = ad_len - adBlocks * 16;
         for(int i = 0; i<adBlocks;i++){
-            if(sStarted){
-                for(int j = 0; j<16;j++){
-                    S[j] ^= ad[i*16 + j];
-                }
-            } else {
-                memcpy(S, ad, 16);
-                sStarted = 1;
+            for(int j = 0; j<16;j++){
+                S[j] ^= ad[i*16 + j];
             }
-            gcm_gf_multiply_x86(S, S, H);
+            gcm_gf_multiply(S, S, H);
         }
         if(extraAD){
             uint8_t extrablock[16] = {0};
             memcpy(extrablock, ad+(adBlocks*16), extraAD);
-            if(sStarted){
-                for(int i = 0; i<sizeof S; i++){            
-                    S[i] ^= extrablock[i];
-                }
-            } else {
-                memcpy(S, extrablock, 16);
-                sStarted = 1;
+            for(int i = 0; i<sizeof S; i++){            
+                S[i] ^= extrablock[i];
             }
-            gcm_gf_multiply_x86(S, S, H);            
+            gcm_gf_multiply(S, S, H);            
         }
     }
 
@@ -229,15 +188,10 @@ void temp_AES_GCM(uint8_t* ciphertext, uint8_t* plaintext, int plaintext_length,
             ciphertext[(i*16)+j] = plaintext[(i*16)+j] ^ cipherblock[j];
         }
         counter++;
-        if(sStarted){
-            for(int j = 0; j<sizeof S;j++){
-                S[j] ^= ciphertext[(i*16) + j];
-            }
-        } else {            
-            memcpy(S, ciphertext, 16);
-            sStarted = 1;
+        for(int j = 0; j<sizeof S;j++){
+            S[j] ^= ciphertext[(i*16) + j];
         }
-        gcm_gf_multiply_x86(S, S, H);
+        gcm_gf_multiply(S, S, H);
     }
     uint8_t extrablock_len = plaintext_length - (n * 16);
     if(extrablock_len){
@@ -252,15 +206,10 @@ void temp_AES_GCM(uint8_t* ciphertext, uint8_t* plaintext, int plaintext_length,
         }
         uint8_t extrablock[16] = {0};
         memcpy(extrablock, ciphertext+Nx16, extrablock_len);
-        if(sStarted){
-            for(int i = 0; i<sizeof extrablock;i++){
-                S[i] ^= extrablock[i];
-            }
-        } else {
-            memcpy(S, extrablock, sizeof extrablock);
-            sStarted = 1;
+        for(int i = 0; i<sizeof extrablock;i++){
+            S[i] ^= extrablock[i];
         }
-        gcm_gf_multiply_x86(S, S, H);
+        gcm_gf_multiply(S, S, H);
     }
 
     // int u = 128 * ceil((float)(16 * 8)/128) - (16 * 8);
@@ -278,30 +227,17 @@ void temp_AES_GCM(uint8_t* ciphertext, uint8_t* plaintext, int plaintext_length,
         S[i] ^= lenBlock[i];
     }
 
-    gcm_gf_multiply_x86(S, S, H);
-
-    uint8_t tag[16];
+    gcm_gf_multiply(S, S, H);
 
     aes128_encrypt_block(J0, round_keys, tag);
 
     for(int i = 0; i< sizeof J0; i++){
         tag[i] ^= S[i];
     }
-
-    printf("tag:        "); print_hex(tag, 16);
-
 }
 void from_hex(uint8_t* out, char* in, int len){
     size_t outlen;
     sodium_hex2bin(out, len/2, in, len, NULL, &outlen, NULL);
-}
-void reverse_16array(uint8_t* arr){
-    uint8_t temp;
-    for(int i = 0; i<8; i++){
-        temp = arr[i];
-        arr[i] = arr[15-i];
-        arr[15-i] = temp;
-    }
 }
 int main(){
 
@@ -315,61 +251,12 @@ int main(){
     from_hex(plaintext, "abcd1028743610923784610275861307580834765028374506",sizeof(plaintext)*2);
 
     uint8_t ciphertext[sizeof plaintext] = {0};
+    uint8_t tag[16] = {0};
 
-    temp_AES_GCM(ciphertext, plaintext, sizeof plaintext, ad, sizeof ad, key, iv);
+    s_aes_128_gcm_encypt(ciphertext, tag, plaintext, sizeof plaintext, ad, sizeof ad, key, iv);
 
     printf("ciphertext: "); print_hex(ciphertext, sizeof ciphertext);
-
-
-
-    // benchmark
-    if(1){
-        long data_len = 1 * 1000 * 1000 * 1000;
-        uint8_t* data = malloc(data_len);
-        memset(data, 5, data_len);
-        uint8_t* des = malloc(data_len);
-        
-        float start_time = (float)clock()/CLOCKS_PER_SEC;
-
-        temp_AES_GCM(des, data, data_len, NULL, 0, key, iv);
-
-        float dif_time = ((float)clock()/CLOCKS_PER_SEC) - start_time;
-        printf("----- %f ------\n",dif_time);
-    }
-    // gcm testing
-    if(0){
-        printf("----- GCM MATH TESTING ------\n");
-        if(1){
-            uint8_t X[16] = {1,2,3,4,5,6,7,8,9,0};
-            uint8_t Y[16] = {1};
-            uint8_t out1[16] = {0};
-
-            __m128i reverse_mask = _mm_set_epi8(0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15);
-
-            __m128i Xreg = _mm_loadu_si128((__m128i*)X);
-            __m128i Yreg = _mm_loadu_si128((__m128i*)Y);
-            __m128i outReg;
-
-            Xreg = _mm_shuffle_epi8(Xreg, reverse_mask);
-            Yreg = _mm_shuffle_epi8(Yreg, reverse_mask);
-
-            gfmul(Xreg, Yreg, &outReg);
-
-            outReg = _mm_shuffle_epi8(outReg, reverse_mask);
-            _mm_storeu_si128((__m128i*)out1, outReg);            
-
-            printf("out1 "); print_hex(out1, 16);
-        }
-        if(1){
-            uint8_t X[16] = {1,2,3,4,5,6,7,8,9,0};
-            uint8_t Y[16] = {1};
-            uint8_t out2[16] = {0};
-
-            gcm_gf_multiply_x86(out2, X, Y);
-
-            printf("out2 "); print_hex(out2, 16);
-        }
-    }
+    printf("tag:        "); print_hex(tag, sizeof tag);
 
     return 0;
 }

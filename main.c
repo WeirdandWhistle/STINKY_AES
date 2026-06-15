@@ -176,7 +176,7 @@ void temp_AES_GCM(uint8_t* ciphertext, uint8_t plaintext[16], uint8_t key[16], u
 
     uint8_t zero_block[16] = {0};
     memset(zero_block, 0, sizeof zero_block);
-    uint8_t H[16];
+    uint8_t H[16] = {0};
     aes128_encrypt_block(zero_block, round_keys, H);
 
     uint32_t counter = 1;
@@ -203,7 +203,7 @@ void temp_AES_GCM(uint8_t* ciphertext, uint8_t plaintext[16], uint8_t key[16], u
             for(int i = 0; i<sizeof S;i++){
                 S[i] ^= cipherblock[i];
             }
-        gcm_gf_multiply_x86(S, S, H);
+            gcm_gf_multiply_x86(S, S, H);
         }    
     }
 
@@ -226,7 +226,7 @@ void temp_AES_GCM(uint8_t* ciphertext, uint8_t plaintext[16], uint8_t key[16], u
 
     uint8_t tag[16];
 
-    aes128_encrypt_block(S, round_keys, tag);
+    aes128_encrypt_block(J0, round_keys, tag);
 
     for(int i = 0; i< sizeof J0; i++){
         tag[i] ^= S[i];

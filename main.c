@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <tmmintrin.h>
 #include <wmmintrin.h> // Header for Intel/AMD AES-NI intrinsics
 #include <emmintrin.h> // Header for SSE2 (__m128i data type)
@@ -101,7 +102,7 @@ void key_expansion(uint8_t* key, uint32_t* w, int Nk){
     uint32_t temp;
 
     i = Nk;
-    while(i < Nb * (Nr+1)){
+    while(i < aes_128_Nb * (aes_128_Nr+1)){
         temp = w[i-1];
         // printf("temp = %" PRIx32 "\n", temp);
         if(i % Nk == 0){
@@ -135,17 +136,19 @@ void get_Jn_bytes(uint8_t* out, uint8_t iv[12], uint32_t counter){
     get_uint32_bytes(counter_array, counter);
     combine_array(out, iv, 12, counter_array, 4);
 }
-
-void s_aes_128_gcm_encypt(uint8_t* ciphertext, uint8_t tag[16], uint8_t* plaintext, int plaintext_length, uint8_t* ad, int ad_len, uint8_t key[16], uint8_t iv[12]){
+void generate_round_keys(__m128i round_keys[11], uint8_t key[16]){
     uint32_t w[44] = {0};
-    key_expansion(key, w, 4);
-    __m128i round_keys[11] __attribute__((aligned(16)));
+    key_expansion(key, w, aes_128_Nk);
     for (int i = 0; i < 44; i++) {
         w[i] = ntohl(w[i]);
     }
     for(int round = 0; round < 11; round++){
         round_keys[round] = _mm_load_si128((const __m128i*)&w[round*4]);
     }
+}
+void s_aes_128_gcm_encypt(uint8_t* ciphertext, uint8_t tag[16], uint8_t* plaintext, int plaintext_length, uint8_t* ad, int ad_len, uint8_t key[16], uint8_t iv[12]){
+    __m128i round_keys[11] __attribute__((aligned(16)));
+    generate_round_keys(round_keys, key);
 
     uint8_t zero_block[16] = {0};
     memset(zero_block, 0, sizeof zero_block);
@@ -235,6 +238,133 @@ void s_aes_128_gcm_encypt(uint8_t* ciphertext, uint8_t tag[16], uint8_t* plainte
         tag[i] ^= S[i];
     }
 }
+void xor_16_hardware(uint8_t out[16], uint8_t a[16], uint8_t b[16]){
+    __m128i aReg = _mm_load_si128((__m128i*)a);
+    __m128i bReg = _mm_load_si128((__m128i*)b);
+
+    __m128i xor = _mm_xor_si128(aReg, bReg);
+
+    _mm_storeu_si128((__m128i*)out, xor);
+}
+int s_aes_128_gcm_decrypt(uint8_t* plaintext, uint8_t* ad, int ad_len, uint8_t* ciphertext, int ciphertext_length, uint8_t tag[16], uint8_t key[16], uint8_t iv[12]){
+    __m128i round_keys[11] __attribute__((aligned(16)));
+    generate_round_keys(round_keys, key);
+
+    uint8_t H[16] = {0};
+    aes128_encrypt_block(H, round_keys, H);
+
+    uint32_t counter = 1;
+    uint8_t J0[16] = {0};
+    get_Jn_bytes(J0, iv, counter);
+    counter++;
+    uint8_t S[16] = {0};
+
+    int n = ciphertext_length / 16;
+    uint8_t extra_ciphertext = ciphertext_length - (n*16);
+    uint8_t cipherblock[16];
+    uint8_t Jn[16] = {0};
+
+    int addtionalBlocks = ad_len / 16;
+    uint8_t extraAD = ad_len - addtionalBlocks;
+    for(int i = 0; i<addtionalBlocks; i++){
+        #if defined(HARDWARE_SPEED)
+            xor_16_hardware(S, S, ad+(i*16));
+        #else
+            for(int j = 0; j<16; j++){
+                S[j] ^= ad[(i*16)+j];
+            }
+        #endif
+        gcm_gf_multiply(S, S, H);
+    }
+    if(extraAD){
+        uint8_t extrablock[16] = {0};
+        memcpy(extrablock, ad+(addtionalBlocks*16), 16);
+
+        #if defined(HARDWARE_SPEED)
+            xor_16_hardware(S, S, extrablock);
+        #else
+            for(int i = 0; i<16;i++){
+                S[i] ^= extrablock[i];
+            }
+        #endif
+        gcm_gf_multiply(S, S, H);
+    }
+
+    for(int i = 0; i<n;i++){
+        get_Jn_bytes(Jn, iv, counter);
+        aes128_encrypt_block(Jn, round_keys, cipherblock);
+        counter++;
+
+        #if defined(HARDWARE_SPEED)
+            xor_16_hardware(plaintext+(i*16), ciphertext+(i*16), cipherblock);
+            xor_16_hardware(S, S, ciphertext+(i*16));
+        #else
+            for(int j = 0; j<16; j++){
+                plaintext[i+j] = cipherblock[j] ^ ciphertext[i+j];
+                S[j] ^= ciphertext[(i*16)+j];
+            }
+        #endif
+        gcm_gf_multiply(S, S, H);
+    }
+    if(extra_ciphertext){
+        uint8_t extrablock[16] = {0};
+        memcpy(extrablock, ciphertext+(n*16), 16);
+        
+        get_Jn_bytes(Jn, iv, counter);
+        aes128_encrypt_block(Jn, round_keys, cipherblock);
+        counter++;
+
+        for(int i = 0; i<extra_ciphertext;i++){
+            plaintext[(n*16)+i] = extrablock[i] ^ cipherblock[i];
+        }
+        #if defined(HARDWARE_SPEED)
+            xor_16_hardware(S, S, extrablock);
+        #else
+            for(int i = 0; i<16;i++){
+                S[i] ^= extrablock[i];
+            }
+        #endif
+        gcm_gf_multiply(S, S, H);
+    }
+
+    uint8_t lenA[8] = {0};
+    get_uint32_bytes(lenA+4, ad_len*8);
+
+    uint8_t lenC[8] = {0};
+    get_uint32_bytes(lenC+4, ciphertext_length*8);
+
+    uint8_t lenBlock[16];
+    combine_array(lenBlock, lenA, 8, lenC, 8);
+
+    #if defined(HARDWARE_SPEED)
+        xor_16_hardware(S, S, lenBlock);
+    #else
+        for(int i = 0; i<sizeof S;i++){
+            S[i] ^= lenBlock[i];
+        }
+    #endif
+
+    gcm_gf_multiply(S, S, H);
+
+    uint8_t T[16];
+    aes128_encrypt_block(J0, round_keys, T);
+
+    #if defined(HARDWARE_SPEED)
+        xor_16_hardware(T, S, T);
+    #else
+        for(int i = 0; i<sizeof S;i++){
+            T[i] ^= S[i];
+        }
+    #endif
+
+    // constant time compare
+    uint8_t notEqual = 0;
+    for(int i = 0; i<16;i++){
+        notEqual |= (tag[i] ^ T[i]);
+    }
+
+    return notEqual;
+}
 void from_hex(uint8_t* out, char* in, int len){
     size_t outlen;
     sodium_hex2bin(out, len/2, in, len, NULL, &outlen, NULL);
@@ -255,8 +385,13 @@ int main(){
 
     s_aes_128_gcm_encypt(ciphertext, tag, plaintext, sizeof plaintext, ad, sizeof ad, key, iv);
 
-    printf("ciphertext: "); print_hex(ciphertext, sizeof ciphertext);
-    printf("tag:        "); print_hex(tag, sizeof tag);
+    // printf("ciphertext: "); print_hex(ciphertext, sizeof ciphertext);
+    // printf("tag:        "); print_hex(tag, sizeof tag);
+
+    uint8_t temp[sizeof plaintext] = {0};
+    assert(s_aes_128_gcm_decrypt(temp, ad, sizeof ad, ciphertext, sizeof ciphertext, tag, key, iv)==0);
+
+    printf("plaintext\nabcd1028743610923784610275861307580834765028374506\n"); print_hex(plaintext, sizeof plaintext);
 
     return 0;
 }

@@ -8,6 +8,7 @@
 #include <inttypes.h>
 #include "gcm_core.h"
 #include <sodium.h>
+#include <math.h>
 // #include <stdlib.h>
 
 static const uint8_t sbox[256] = {
@@ -163,7 +164,7 @@ void get_Jn_bytes(uint8_t* out, uint8_t iv[12], uint32_t counter){
     combine_array(out, iv, 12, counter_array, 4);
 }
 
-void temp_AES_GCM(uint8_t* ciphertext, uint8_t plaintext[16], uint8_t key[16], uint8_t iv[12]){
+void temp_AES_GCM(uint8_t* ciphertext, uint8_t* plaintext, int plaintext_length, uint8_t* ad, int ad_len, uint8_t key[16], uint8_t iv[12]){
     uint32_t w[44] = {0};
     key_expansion(key, w, 4);
     __m128i round_keys[11] __attribute__((aligned(16)));
@@ -185,9 +186,39 @@ void temp_AES_GCM(uint8_t* ciphertext, uint8_t plaintext[16], uint8_t key[16], u
     counter++;
     uint8_t S[16] = {0};
 
-    int n = 1;
+    int n = plaintext_length / 16;
     uint8_t Jn[16] = {0};
     uint8_t cipherblock[16] = {0};
+    uint8_t sStarted = 0;
+
+    if(ad_len){
+        int adBlocks = ad_len / 16;
+        uint8_t extraAD = ad_len - adBlocks * 16;
+        for(int i = 0; i<adBlocks;i++){
+            if(sStarted){
+                for(int j = 0; j<16;j++){
+                    S[j] ^= ad[i*16 + j];
+                }
+            } else {
+                memcpy(S, ad, 16);
+                sStarted = 1;
+            }
+            gcm_gf_multiply_x86(S, S, H);
+        }
+        if(extraAD){
+            uint8_t extrablock[16] = {0};
+            memcpy(extrablock, ad+(adBlocks*16), extraAD);
+            if(sStarted){
+                for(int i = 0; i<sizeof S; i++){            
+                    S[i] ^= extrablock[i];
+                }
+            } else {
+                memcpy(S, extrablock, 16);
+                sStarted = 1;
+            }
+            gcm_gf_multiply_x86(S, S, H);            
+        }
+    }
 
     for(int i = 0; i<n; i++){
         get_Jn_bytes(Jn, iv, counter);
@@ -196,24 +227,47 @@ void temp_AES_GCM(uint8_t* ciphertext, uint8_t plaintext[16], uint8_t key[16], u
             ciphertext[(i*16)+j] = plaintext[(i*16)+j] ^ cipherblock[j];
         }
         counter++;
-        if(i==0){
-            gcm_gf_multiply_x86(S, ciphertext, H);
-        } else {
-            printf("else block for s");
-            for(int i = 0; i<sizeof S;i++){
-                S[i] ^= cipherblock[i];
+        if(sStarted){
+            for(int j = 0; j<sizeof S;j++){
+                S[j] ^= ciphertext[(i*16) + j];
             }
-            gcm_gf_multiply_x86(S, S, H);
-        }    
+        } else {            
+            memcpy(S, ciphertext, 16);
+            sStarted = 1;
+        }
+        gcm_gf_multiply_x86(S, S, H);
+    }
+    uint8_t extrablock_len = plaintext_length - (n * 16);
+    if(extrablock_len){
+        int Nx16 = n*16;
+
+        get_Jn_bytes(Jn, iv, counter);
+        aes128_encrypt_block(Jn, round_keys, cipherblock);
+        counter++;
+
+        for(int i = 0; i<extrablock_len; i++){
+            ciphertext[Nx16 + i] = cipherblock[i] ^ plaintext[Nx16 + i];
+        }
+        uint8_t extrablock[16] = {0};
+        memcpy(extrablock, ciphertext+Nx16, extrablock_len);
+        if(sStarted){
+            for(int i = 0; i<sizeof extrablock;i++){
+                S[i] ^= extrablock[i];
+            }
+        } else {
+            memcpy(S, extrablock, sizeof extrablock);
+            sStarted = 1;
+        }
+        gcm_gf_multiply_x86(S, S, H);
     }
 
     // int u = 128 * ceil((float)(16 * 8)/128) - (16 * 8);
 
     uint8_t lenA[8] = {0};
-    get_uint32_bytes(lenA+4, 0);
+    get_uint32_bytes(lenA+4, ad_len*8);
 
     uint8_t lenC[8] = {0};
-    get_uint32_bytes(lenC+4, 16*8);
+    get_uint32_bytes(lenC+4, plaintext_length*8);
 
     uint8_t lenBlock[16];
     combine_array(lenBlock, lenA, 8, lenC, 8);
@@ -245,14 +299,16 @@ int main(){
     from_hex(key, "00112233445566778899aabbccddeeff",32);
     uint8_t iv[12] = {0};
     from_hex(iv, "abcdef12345678901f2f3f4f",24);
-    uint8_t plaintext[16] = {0};
-    from_hex(plaintext, "0123456789abcdef0123456789abcdef",32);
+    uint8_t ad[2] = {};
+    from_hex(ad, "abcd", sizeof(ad)*2);
+    uint8_t plaintext[17] = {0};
+    from_hex(plaintext, "0123456789abcdef0123456789abcdefaa",sizeof(plaintext)*2);
 
-    uint8_t ciphertext[16] = {0};
+    uint8_t ciphertext[sizeof plaintext] = {0};
 
-    temp_AES_GCM(ciphertext, plaintext, key, iv);
+    temp_AES_GCM(ciphertext, plaintext, sizeof plaintext, ad, sizeof ad, key, iv);
 
-    printf("ciphertext: "); print_hex(ciphertext, 16);
+    printf("ciphertext: "); print_hex(ciphertext, sizeof ciphertext);
 
     return 0;
 }

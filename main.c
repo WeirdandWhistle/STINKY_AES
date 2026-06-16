@@ -48,6 +48,7 @@ static const uint8_t sbox[256] = {
 /* Function written entirly by AI:
 Encrypts a single 16-byte block using pre-expanded round keys */
 void aes128_encrypt_block(uint8_t* plaintext, __m128i* round_keys, uint8_t* ciphertext) {
+    #if defined(HARDWARE_SPEED)
     // Load the 16-byte plaintext into a 128-bit register (unaligned load)
     __m128i state = _mm_loadu_si128((const __m128i*)plaintext);
 
@@ -70,8 +71,12 @@ void aes128_encrypt_block(uint8_t* plaintext, __m128i* round_keys, uint8_t* ciph
 
     // Store the 128-bit result back into the ciphertext byte array
     _mm_storeu_si128((__m128i*)ciphertext, state);
-}
+    #else
 
+
+
+    #endif
+}
 uint32_t Word(uint8_t a, uint8_t b, uint8_t c, uint8_t d){
     return (a<<24) | (b<<16) | (c<<8) | (d);
 }
@@ -88,6 +93,29 @@ uint32_t SubWord(uint32_t word){
     uint8_t temp[4];
     UnWord(temp, word);
     return Word(sbox[temp[0]], sbox[temp[1]], sbox[temp[2]], sbox[temp[3]]);
+}
+void ShiftRow(uint8_t* mat){
+    uint8_t temp = mat[4];
+    mat[4] = mat[5];
+    mat[5] = mat[6];
+    mat[6] = mat[7];
+    mat[7] = temp;
+
+    temp = mat[8];
+    uint8_t temp2 = mat[9];
+    mat[8] = mat[10];
+    mat[9] = mat[11];
+    mat[10] = temp;
+    mat[11] = temp2; 
+
+    temp = mat[12];
+    mat[12] = mat[15];
+    mat[15] = mat[14];
+    mat[14] = mat[13];
+    mat[13] = temp;
+}
+void aes128_engine_no_hw(uint8_t* plaintext, uint8_t* round_keys, uint8_t* ciphertext){
+
 }
 void key_expansion(uint8_t* key, uint32_t* w, int Nk){
     uint8_t rcon[] = {0x01, 0x02, 0x04, 0x08, 0x10,

@@ -45,16 +45,31 @@ static const uint8_t sbox[256] = {
     0x0d, 0xbf, 0xe6, 0x42, 0x68, 0x41, 0x99, 0x2d, 0x0f,
     0xb0, 0x54, 0xbb, 0x16};
 
-/* Function written entirly by AI:
+
+
+void print_hex(unsigned char* a, int aSize){
+    for(int i = 0; i<aSize;i++){
+        printf("%02X",a[i]);
+    }
+    printf("\n");
+}
+void print128_num(__m128i var){
+    uint16_t val[8];
+    memcpy(val, &var, sizeof(val));
+    printf("Numerical: %02x %02x %02x %02x %02x %02x %02x %02x \n", 
+           val[0], val[1], val[2], val[3], val[4], val[5], 
+           val[6], val[7]);
+}
+/* Hardware acceration part written by AI:
 Encrypts a single 16-byte block using pre-expanded round keys */
 void aes128_encrypt_block(uint8_t* plaintext, __m128i* round_keys, uint8_t* ciphertext) {
-    #if defined(HARDWARE_SPEED)
+    // #if defined(HARDWARE_SPEED)
     // Load the 16-byte plaintext into a 128-bit register (unaligned load)
     __m128i state = _mm_loadu_si128((const __m128i*)plaintext);
 
     // Round 0: Whiten
     state = _mm_xor_si128(state, round_keys[0]);
-
+    // print128_num(state);
     // Rounds 1 through 9
     state = _mm_aesenc_si128(state, round_keys[1]);
     state = _mm_aesenc_si128(state, round_keys[2]);
@@ -71,11 +86,11 @@ void aes128_encrypt_block(uint8_t* plaintext, __m128i* round_keys, uint8_t* ciph
 
     // Store the 128-bit result back into the ciphertext byte array
     _mm_storeu_si128((__m128i*)ciphertext, state);
-    #else
+    // #else
 
 
 
-    #endif
+    // #endif
 }
 uint32_t Word(uint8_t a, uint8_t b, uint8_t c, uint8_t d){
     return (a<<24) | (b<<16) | (c<<8) | (d);
@@ -94,28 +109,133 @@ uint32_t SubWord(uint32_t word){
     UnWord(temp, word);
     return Word(sbox[temp[0]], sbox[temp[1]], sbox[temp[2]], sbox[temp[3]]);
 }
-void ShiftRow(uint8_t* mat){
-    uint8_t temp = mat[4];
-    mat[4] = mat[5];
-    mat[5] = mat[6];
-    mat[6] = mat[7];
-    mat[7] = temp;
-
-    temp = mat[8];
-    uint8_t temp2 = mat[9];
-    mat[8] = mat[10];
-    mat[9] = mat[11];
-    mat[10] = temp;
-    mat[11] = temp2; 
-
-    temp = mat[12];
-    mat[12] = mat[15];
-    mat[15] = mat[14];
-    mat[14] = mat[13];
-    mat[13] = temp;
+uint8_t get_cr(uint8_t* in, uint8_t col, uint8_t row){
+    return in[col * 4 + row];
 }
-void aes128_engine_no_hw(uint8_t* plaintext, uint8_t* round_keys, uint8_t* ciphertext){
+void set_cr(uint8_t* in, uint8_t col, uint8_t row, uint8_t byte){
+    in[col * 4 + row] = byte;
+}
+void ShiftRow(uint8_t* mat){
+    // uint8_t temp = get_cr(mat, 0,1);
+    // set_cr(mat, 0, 1, get_cr(mat, 1, 1));
+    // set_cr(mat, 1, 1, get_cr(mat, 2, 1));
+    // set_cr(mat, 2, 1, get_cr(mat, 3, 1));
+    // set_cr(mat, 3, 1, temp);
 
+    // temp = get_cr(mat, 0, 2);
+    // uint8_t temp2 = get_cr(mat, 2,1);
+    // set_cr(mat, 0, 2, get_cr(mat, 2, 2));
+    // set_cr(mat, 1, 2, get_cr(mat, 3, 2));
+    // set_cr(mat, 2, 2, temp);
+    // set_cr(mat, 3, 2, temp2);
+
+    // temp = get_cr(mat, 3, 3);
+    // set_cr(mat, 3, 3, get_cr(mat, 2,3));
+    // set_cr(mat, 2, 3, get_cr(mat, 1, 3));
+    // set_cr(mat, 1, 3, get_cr(mat, 0, 3));
+    // set_cr(mat, 0, 3, temp);
+
+    // if it works it works. WRITTEN BY AI:
+
+    // Row 0: Unchanged
+
+    // Row 1: Shift left by 1 position
+    uint8_t temp = get_cr(mat, 0, 1);
+    set_cr(mat, 0, 1, get_cr(mat, 1, 1));
+    set_cr(mat, 1, 1, get_cr(mat, 2, 1));
+    set_cr(mat, 2, 1, get_cr(mat, 3, 1));
+    set_cr(mat, 3, 1, temp);
+
+    // Row 2: Shift left by 2 positions
+    temp = get_cr(mat, 0, 2);
+    uint8_t temp2 = get_cr(mat, 1, 2);
+    set_cr(mat, 0, 2, get_cr(mat, 2, 2));
+    set_cr(mat, 1, 2, get_cr(mat, 3, 2));
+    set_cr(mat, 2, 2, temp);
+    set_cr(mat, 3, 2, temp2);
+
+    // Row 3: Shift left by 3 positions (or right by 1)
+    temp = get_cr(mat, 3, 3);
+    set_cr(mat, 3, 3, get_cr(mat, 2, 3));
+    set_cr(mat, 2, 3, get_cr(mat, 1, 3));
+    set_cr(mat, 1, 3, get_cr(mat, 0, 3));
+    set_cr(mat, 0, 3, temp);
+}
+void AddRoundKey(uint8_t* mat, uint32_t* w, uint8_t round){
+    int l = round * aes_128_Nb;
+    for(int col = 0; col < 4; col++){
+        uint32_t word = w[l + col];
+        // printf("%08"PRIx32"", word);
+        for(int row = 0; row < 4; row++){
+            // printf("row spec %02x\n",(uint8_t)(word >> ((3-row)*8)));
+            mat[col*4 + row] ^= (uint8_t)(word >> ((3-row)*8));
+            // printf("during mat "); print_hex(mat, 16);
+        }
+    }
+    // printf("out mat "); print_hex(mat, 16);
+    /*
+    for(int col = 0; col < 4; col++){
+            
+    }
+    for(int row = 0; row < 4; row++){
+        
+    }
+    
+    mat[row*4 + col] ^= (uint8_t)(w[l + col] >> ((3-row)*8));
+    */
+}
+void MixColumns(uint8_t* mat){
+    uint8_t orgMat[16] = {0};
+    memcpy(orgMat, mat, 16);
+
+    for(int col = 0; col < 4; col++){
+        uint8_t s0 = get_cr(orgMat, col, 0);
+        uint8_t s1 = get_cr(orgMat, col, 1);
+        uint8_t s2 = get_cr(orgMat, col, 2);
+        uint8_t s3 = get_cr(orgMat, col, 3);
+
+        set_cr(mat, col, 0,gcm_gf28_mult(2, s0) ^ gcm_gf28_mult(3, s1) ^ s2 ^ s3);
+        set_cr(mat, col, 1, s0 ^ gcm_gf28_mult(2, s1) ^ gcm_gf28_mult(3, s2) ^ s3);
+        set_cr(mat, col, 2, s0 ^  s1 ^ gcm_gf28_mult(2, s2) ^ gcm_gf28_mult(3, s3));
+        set_cr(mat, col, 3, gcm_gf28_mult(3, s0) ^ s1 ^ s2 ^ gcm_gf28_mult(2, s3));
+    }
+    // 6353e08c0960e104cd70b751bacad0e7
+    // 6353E08C0960E104CD70B751BACAD0E7
+}
+void SubBytes(uint8_t* mat){
+    for(int i = 0; i<16; i++){
+        mat[i] = sbox[mat[i]];
+    }
+}
+void aes128_engine_no_hw(uint8_t* plaintext, uint32_t* w, uint8_t* ciphertext){
+    uint8_t state[16] = {0};
+    memcpy(state, plaintext, 16);
+
+    int round = 0;
+
+    // printf("beforestate "); print_hex(state, 16);
+    AddRoundKey(state, w, round);
+    round++;
+    // return;
+
+    while(round<=aes_128_Nr-1){
+        // printf("%d start state ",round); print_hex(state, 16);
+        SubBytes(state);
+        // printf("s_box state "); print_hex(state, 16);
+        ShiftRow(state);
+        // printf("s_row state "); print_hex(state, 16);
+        MixColumns(state);
+        // printf("m_col state "); print_hex(state, 16);
+        AddRoundKey(state, w, round);
+        round++;
+        // return;
+    }
+
+    SubBytes(state);
+    ShiftRow(state);
+    AddRoundKey(state, w, round);
+
+    memcpy(ciphertext, state, 16);
 }
 void key_expansion(uint8_t* key, uint32_t* w, int Nk){
     uint8_t rcon[] = {0x01, 0x02, 0x04, 0x08, 0x10,
@@ -147,12 +267,6 @@ void combine_array(unsigned char* p, unsigned char* a, int a_len, unsigned char*
     for(int i = 0; i<a_len+b_len;i++){
         p[i] = i<a_len ? a[i] : b[i-a_len]; 
     }
-}
-void print_hex(unsigned char* a, int aSize){
-    for(int i = 0; i<aSize;i++){
-        printf("%02X",a[i]);
-    }
-    printf("\n");
 }
  void get_uint32_bytes(uint8_t* a, uint32_t b){
     uint32_t temp = htonl(b);
@@ -354,7 +468,7 @@ int s_aes_128_gcm_decrypt(uint8_t* plaintext, uint8_t* ad, int ad_len, uint8_t* 
         #endif
         gcm_gf_multiply(S, S, H);
     }
-    printf("S: "); print_hex(S, 16);
+    // printf("S: "); print_hex(S, 16);
 
     uint8_t lenA[8] = {0};
     get_uint32_bytes(lenA+4, ad_len*8);
@@ -404,7 +518,7 @@ void from_hex(uint8_t* out, char* in, int len){
 int main(){
 
     uint8_t key[16] = {0};
-    from_hex(key, "00112233445566778899aabbccddeeff",32);
+    from_hex(key, "000102030405060708090a0b0c0d0e0f",32);
     uint8_t iv[12] = {0};
     from_hex(iv, "abcdef12345678901f2f3f4f",24);
     uint8_t ad[25] = {};
@@ -415,15 +529,38 @@ int main(){
     uint8_t ciphertext[sizeof plaintext] = {0};
     uint8_t tag[16] = {0};
 
-    s_aes_128_gcm_encypt(ciphertext, tag, plaintext, sizeof plaintext, ad, sizeof ad, key, iv);
+    // s_aes_128_gcm_encypt(ciphertext, tag, plaintext, sizeof plaintext, ad, sizeof ad, key, iv);
 
     // printf("ciphertext: "); print_hex(ciphertext, sizeof ciphertext);
     // printf("tag:        "); print_hex(tag, sizeof tag);
 
     uint8_t temp[sizeof plaintext] = {0};
-    assert(s_aes_128_gcm_decrypt(temp, ad, sizeof ad, ciphertext, sizeof ciphertext, tag, key, iv)==0);
+    // assert(s_aes_128_gcm_decrypt(temp, ad, sizeof ad, ciphertext, sizeof ciphertext, tag, key, iv)==0);
 
     // printf("plaintext\nabcd1028743610923784610275861307580834765028374506\n"); print_hex(plaintext, sizeof plaintext);
+
+    if(1){
+        printf("GF(2^8) {57}*{13} %02x ? fe\n", gcm_gf28_mult(0x57, 0x13));
+        printf("GF(2^8) {13}*{57} %02x ? fe\n", gcm_gf28_mult(0x13, 0x57));
+        printf("GF(2^8) {53}*{ca} %02x ? 01\n", gcm_gf28_mult(0x53, 0xca));
+        uint32_t w[44] = {0};
+        key_expansion(key, w, aes_128_Nk);
+        __m128i round_keys[11];
+        generate_round_keys(round_keys, key);
+
+        uint8_t t1[16] = {0};
+        from_hex(t1, "00112233445566778899aabbccddeeff", 32);
+        uint8_t t2[16] = {0};
+        memcpy(t2, t1, 16);
+        uint8_t o1[16] = {0};
+        uint8_t o2[16] = {0};
+
+        aes128_engine_no_hw(t1, w, o1);
+        aes128_encrypt_block(t2, round_keys, o2);
+
+        printf("o1: "); print_hex(o1, 16);
+        printf("o2: "); print_hex(o2, 16);
+    }
 
     return 0;
 }

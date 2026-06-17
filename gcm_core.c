@@ -73,20 +73,43 @@ void gcm_gf_multiply(uint8_t* out, uint8_t *X, const uint8_t *Y){
 
     for(int i = 0; i<128; i++){
         int xBit = (X[i/8] >> (7 - (i%8))) & 0x1; // 11001101 & 00000001
-        if(xBit){
-            for(int j = 0; j <sizeof Z; j++){
-                Z[j] ^= V[j];
-            }
+        // if(xBit){
+        //     for(int j = 0; j <sizeof Z; j++){
+        //         Z[j] ^= V[j];
+        //     }
+        // }
+        for(int j = 0; j <sizeof Z; j++){
+            Z[j] ^= V[j] & (-xBit);
         }
+
         uint8_t carry = 0; 
         for(int j = 0; j<16; j++){
             uint8_t next_carry = V[j] & 0x01;
             V[j] = (V[j] >> 1) | (carry << 7);
             carry = next_carry;
         }
-        if(carry){
-            V[0] ^= 0xE1;
-        }        
+        // if(carry){
+        //     V[0] ^= 0xE1;
+        // }
+        V[0] ^= 0xE1 & (-carry);  
     }
     memcpy(out, Z, 16);
+}
+// algorithm defined here: https://en.wikipedia.org/wiki/Finite_field_arithmetic#Multiplication
+uint8_t gcm_gf28_mult(uint8_t a, uint8_t b){
+    uint8_t p = 0;
+    for(int i = 0; i<8; i++){
+        // if(b & 0x01)// b & 00000001
+        //     p ^= a; // polynomial addtion
+        p = p ^ (a & ( -(b & 0x01)));
+
+        // if(a & 0x80)
+        //     a = (a << 1) ^ 0x1b;
+        // else
+        //     a <<= 1;
+        a = (a << 1) ^ (0x1b & ( -((a & 0x80) >> 7)));
+
+        b >>= 1;
+    }
+    return p;
 }

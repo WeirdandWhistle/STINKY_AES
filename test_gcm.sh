@@ -1,7 +1,7 @@
 #!/bin/bash
 
 python3 -c '
-KEY  = bytes.fromhex("00112233445566778899aabbccddeeff")
+KEY  = bytes.fromhex("000102030405060708090a0b0c0d0e0f")
 IV   = bytes.fromhex("abcdef12345678901f2f3f4f")
 PT   = bytes.fromhex("abcd1028743610923784610275861307580834765028374506")
 AD   = bytes.fromhex("abcd1028743610923784610275861307580834765028374506")

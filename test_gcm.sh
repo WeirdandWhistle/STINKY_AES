@@ -13,5 +13,6 @@ ct_with_tag = aesgcm.encrypt(IV, PT, AD)
 print("Ciphertext:", ct_with_tag[:-16].hex())
 print("Tag:       ", ct_with_tag[-16:].hex())
 '
+make clean
 make
 ./main

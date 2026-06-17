@@ -9,7 +9,7 @@
     uint8_t gcm_gf28_mult(uint8_t a, uint8_t b);
     
     #if defined(HARDWARE_SPEED)
-        void gcm_ghash(__m128i X, __m128i S, __m128i H);
+        void gcm_ghash(__m128i X, __m128i* S, __m128i H);
     #endif
 
     

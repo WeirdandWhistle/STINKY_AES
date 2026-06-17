@@ -60,11 +60,11 @@ void hardware_gcm_mult(uint8_t* out, uint8_t *X, const uint8_t *Y){
     _mm_storeu_si128((__m128i*)out, outReg);
 }
 #if defined(HARDWARE_SPEED)
-    void gcm_ghash(__m128i X, __m128i S, __m128i H){
+    void gcm_ghash(__m128i X, __m128i* S, __m128i H){
         __m128i reverse_mask = _mm_set_epi8(0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15);
         X = _mm_shuffle_epi8(X, reverse_mask);
-        S = _mm_xor_si128(X, S);
-        gfmul(S, H, &S);
+        *S = _mm_xor_si128(X, *S);
+        gfmul(*S, H, S);
     }
 #endif
 void gcm_gf_multiply(uint8_t* out, uint8_t *X, const uint8_t *Y){

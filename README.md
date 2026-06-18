@@ -17,3 +17,6 @@ This is just some random libary you found on the internet, and probaly shouldn't
 It should be branching/timing attack safe but I DO NOT KNOW WHAT I AM DOING.
 
 # USE AT YOUR OWN RISK
+# Problems?
+Create an issue and I might get to it.   
+Or fork it, fix it, and create a pull request.

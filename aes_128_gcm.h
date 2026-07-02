@@ -3,7 +3,7 @@
 
     #include <stdint.h>
 
-    // #define HARDWARE_SPEED // make sure to compile with flags like: -O3 -maes -msse4 -mpclmul -march=native
+    #define HARDWARE_SPEED // make sure to compile with flags like: -O3 -maes -msse4 -mpclmul -march=native
 
     // for aes 128
     #define aes_128_key_bits 128

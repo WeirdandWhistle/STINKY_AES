@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include <string.h>
 #include <netinet/in.h>
 #include <inttypes.h>
@@ -407,7 +408,7 @@ void s_aes_128_gcm_encypt(uint8_t* ciphertext, uint8_t tag[16], uint8_t* plainte
         uint8_t extraAD = ad_len - adBlocks * 16;
         for(int i = 0; i<adBlocks;i++){
             #if defined(HARDWARE_SPEED)
-                __m128i block = _mm_loadu_si128((__m128i*)ad+i*16);
+                __m128i block = _mm_loadu_si128((__m128i*)(ad+i*16));
                 gcm_ghash(block, &S_hw, H_hw);
             #else
                 for(int j = 0; j<16;j++){
@@ -420,6 +421,7 @@ void s_aes_128_gcm_encypt(uint8_t* ciphertext, uint8_t tag[16], uint8_t* plainte
             uint8_t extrablock[16] = {0};
             memcpy(extrablock, ad+(adBlocks*16), extraAD);
             #if defined(HARDWARE_SPEED)
+                // printf("debug 1\n");
                 __m128i block = _mm_loadu_si128((__m128i*)extrablock);
                 gcm_ghash(block, &S_hw, H_hw);
             #else
@@ -435,7 +437,8 @@ void s_aes_128_gcm_encypt(uint8_t* ciphertext, uint8_t tag[16], uint8_t* plainte
         #if defined(HARDWARE_SPEED)
             aes128_encrypt_block_hw(Jn, round_keys, cipherblock);
             xor_16_hardware(ciphertext+i*16, plaintext+i*16, cipherblock);
-            __m128i block = _mm_loadu_si128((__m128i*)ciphertext+16*i);
+            // printf("debug 2, i=%d, ciphertextlen=%d\n",i,plaintext_length);
+            __m128i block = _mm_loadu_si128((__m128i*)(ciphertext+16*i));
             gcm_ghash(block, &S_hw, H_hw);
         #else
             aes128_engine_no_hw(Jn, w, cipherblock);
@@ -466,6 +469,7 @@ void s_aes_128_gcm_encypt(uint8_t* ciphertext, uint8_t tag[16], uint8_t* plainte
         uint8_t extrablock[16] = {0};
         memcpy(extrablock, ciphertext+Nx16, extrablock_len);
         #if defined(HARDWARE_SPEED)
+            // printf("debug 3\n");
             __m128i block = _mm_loadu_si128((__m128i*)extrablock);
             gcm_ghash(block, &S_hw, H_hw);
         #else
@@ -490,6 +494,7 @@ void s_aes_128_gcm_encypt(uint8_t* ciphertext, uint8_t tag[16], uint8_t* plainte
 
     
     #if defined(HARDWARE_SPEED)
+        // printf("debug 4\n");
         __m128i block = _mm_loadu_si128((__m128i*)lenBlock);
         gcm_ghash(block, &S_hw, H_hw);
         S_hw = _mm_shuffle_epi8(S_hw, reverse_mask);
@@ -545,7 +550,7 @@ int s_aes_128_gcm_decrypt(uint8_t* plaintext, uint8_t* ad, int ad_len, uint8_t* 
         uint8_t extraAD = ad_len - adBlocks * 16;
         for(int i = 0; i<adBlocks;i++){
             #if defined(HARDWARE_SPEED)
-                __m128i block = _mm_loadu_si128((__m128i*)ad+i*16);
+                __m128i block = _mm_loadu_si128((__m128i*)(ad+i*16));
                 gcm_ghash(block, &S_hw, H_hw);
             #else
                 for(int j = 0; j<16;j++){
@@ -575,7 +580,7 @@ int s_aes_128_gcm_decrypt(uint8_t* plaintext, uint8_t* ad, int ad_len, uint8_t* 
         #if defined(HARDWARE_SPEED)
             aes128_encrypt_block_hw(Jn, round_keys, cipherblock);
             xor_16_hardware(plaintext+(i*16), ciphertext+(i*16), cipherblock);
-            __m128i block = _mm_loadu_si128((__m128i*)ciphertext+16*i);
+            __m128i block = _mm_loadu_si128((__m128i*)(ciphertext+16*i));
             gcm_ghash(block, &S_hw, H_hw);
         #else
             aes128_engine_no_hw(Jn, w, cipherblock);

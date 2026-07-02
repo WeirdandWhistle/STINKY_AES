@@ -3,7 +3,7 @@
 2. Configure the .h file. Mainly define (or not) the `HARDWARE_SPEED` macro. This will turn hardware acceration on/off. If it is on (define it) make sure to compile with the flags `-maes -msse4 -mpclmul` OR `-maes -msse4 -mpclmul -O3 -lm --march=native`. And only turn on it compiling for intel/AMD x84. 
 
 # Speed
-I benchmarked this at about 1GB per 2 seconds so ~500MB per second (with hardware acceration).  
+I benchmarked this at about 2GB per 1.1 seconds so ~950MB per second (with hardware acceration).  
 This is blown away by libsodium and I assume OpenSSL (not tested) but I am happy with it.   
 For refernce Libsodium (AES_256_GCM) was about 1 GB per 0.1 seconds so ~10GB per second.  
 [Benchmakring project](https://github.com/WeirdandWhistle/crypto_benchmarks)

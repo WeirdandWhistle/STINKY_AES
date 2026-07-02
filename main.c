@@ -28,15 +28,25 @@ int main(){
 
     s_aes_128_gcm_encypt(ciphertext, tag, plaintext, sizeof plaintext, ad, sizeof ad, key, iv);
 
-    printf("ciphertext: "); print_hex(ciphertext, sizeof ciphertext);
-    printf("tag:        "); print_hex(tag, sizeof tag);
+    printf("ciphertext : "); print_hex(ciphertext, sizeof ciphertext);
+    printf("tag:         "); print_hex(tag, sizeof tag);
 
-    uint8_t temp[sizeof plaintext] = {0};
-    int rc = -1;
-    assert(s_aes_128_gcm_decrypt(temp, ad, sizeof ad, ciphertext, sizeof ciphertext, tag, key, iv)==0);
-    // int rc = s_aes_128_gcm_decrypt(temp, ad, sizeof ad, ciphertext, sizeof ciphertext, tag, key, iv);
+    uint8_t temp[sizeof plaintext + 16] = {0};
+    s_aes128_gcm_encrypt_combind(temp, plaintext, sizeof plaintext, ad, sizeof ad, key, iv);
 
-    printf("plaintext, rc=%d\nabcd1028743610923784610275861307580834765028374506\n",rc); print_hex(temp, sizeof plaintext);
+    printf("combind mode:"); print_hex(temp, sizeof temp);
+
+    uint8_t temp2[sizeof plaintext] = {0};
+    int rc = s_aes_128_gcm_decrypt_combind(temp2, ad, sizeof ad, temp, sizeof temp, key, iv);
+    print_hex(temp2, sizeof temp2);
+    assert(rc==0);
+
+    uint8_t temp3[sizeof plaintext] = {0};
+    // int rc = -1;
+    // assert(s_aes_128_gcm_decrypt(temp3, ad, sizeof ad, ciphertext, sizeof ciphertext, tag, key, iv)==0);
+    rc = s_aes_128_gcm_decrypt(temp3, ad, sizeof ad, ciphertext, sizeof ciphertext, tag, key, iv);
+
+    printf("plaintext, rc=%d\nabcd1028743610923784610275861307580834765028374506\n",rc); print_hex(temp3, sizeof plaintext);
 
     // bench marking
     if(0){

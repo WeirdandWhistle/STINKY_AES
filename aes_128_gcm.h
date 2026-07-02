@@ -3,7 +3,7 @@
 
     #include <stdint.h>
 
-    #define HARDWARE_SPEED // make sure to compile with flags like: -O3 -maes -msse4 -mpclmul -march=native
+    // #define HARDWARE_SPEED // make sure to compile with flags like: -O3 -maes -msse4 -mpclmul -march=native
 
     // for aes 128
     #define aes_128_key_bits 128
@@ -13,7 +13,7 @@
     #define aes_128_Nr 10
     #define aes_128_Nk 4
 
-    void print_hex(unsigned char* a, int b);
+    // void print_hex(unsigned char* a, int b);
 
     // used for detached decryption
     int s_aes_128_gcm_decrypt(uint8_t* plaintext, uint8_t* ad, int ad_len, uint8_t* ciphertext, int ciphertext_length, uint8_t tag[16], uint8_t key[aes_128_key_bytes], uint8_t iv[12]);

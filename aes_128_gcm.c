@@ -2,20 +2,17 @@
 #include <string.h>
 #include <netinet/in.h>
 #include <inttypes.h>
+#include <stdint.h>
+
+
 #include "aes_128_gcm.h"
 
 #if defined(HARDWARE_SPEED)
     #include <tmmintrin.h>
     #include <wmmintrin.h> // Header for Intel/AMD AES-NI intrinsics
     #include <emmintrin.h> // Header for SSE2 (__m128i data type)
+    #include <smmintrin.h>
 #endif
-
-void print_hex(unsigned char* a, int aSize){
-    for(int i = 0; i<aSize;i++){
-        printf("%02X",a[i]);
-    }
-    printf("\n");
-}
 
 static const uint8_t sbox[256] = {
     0x63, 0x7c, 0x77, 0x7b, 0xf2, 0x6b, 0x6f, 0xc5, 0x30,
@@ -521,48 +518,56 @@ int s_aes_128_gcm_decrypt(uint8_t* plaintext, uint8_t* ad, int ad_len, uint8_t* 
         key_expansion(key, w, aes_128_Nk);
     #endif
 
-    uint8_t H[16] = {0};
-    #if defined(HARDWARE_SPEED)
-         aes128_encrypt_block_hw(H, round_keys, H);
-    #else
-        aes128_engine_no_hw(H, w, H);
-    #endif
-
     uint32_t counter = 1;
     uint8_t J0[16] = {0};
     get_Jn_bytes(J0, iv, counter);
     counter++;
     uint8_t S[16] = {0};
+    uint8_t H[16] = {0};    
+    #if defined(HARDWARE_SPEED)
+        aes128_encrypt_block_hw(H, round_keys, H);
+
+        __m128i H_hw __attribute__((aligned(16)));
+        H_hw = _mm_loadu_si128((__m128i*)H);
+        __m128i reverse_mask = _mm_set_epi8(0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15);
+        H_hw = _mm_shuffle_epi8(H_hw, reverse_mask);
+
+        __m128i S_hw = _mm_loadu_si128((__m128i*)S);
+    #else
+        aes128_engine_no_hw(H, w, H);
+    #endif
 
     int n = ciphertext_length / 16;
     uint8_t extra_ciphertext = ciphertext_length - (n*16);
     uint8_t cipherblock[16];
     uint8_t Jn[16] = {0};
-
-    int addtionalBlocks = ad_len / 16;
-    uint8_t extraAD = ad_len - addtionalBlocks;
-    for(int i = 0; i<addtionalBlocks; i++){
-        #if defined(HARDWARE_SPEED)
-            xor_16_hardware(S, S, ad+(i*16));
-        #else
-            for(int j = 0; j<16; j++){
-                S[j] ^= ad[(i*16)+j];
-            }
-        #endif
-        gcm_gf_multiply(S, S, H);
-    }
-    if(extraAD){
-        uint8_t extrablock[16] = {0};
-        memcpy(extrablock, ad+(addtionalBlocks*16), 16);
-
-        #if defined(HARDWARE_SPEED)
-            xor_16_hardware(S, S, extrablock);
-        #else
-            for(int i = 0; i<16;i++){
-                S[i] ^= extrablock[i];
-            }
-        #endif
-        gcm_gf_multiply(S, S, H);
+    if(ad_len){
+        int adBlocks = ad_len / 16;
+        uint8_t extraAD = ad_len - adBlocks * 16;
+        for(int i = 0; i<adBlocks;i++){
+            #if defined(HARDWARE_SPEED)
+                __m128i block = _mm_loadu_si128((__m128i*)ad+i*16);
+                gcm_ghash(block, &S_hw, H_hw);
+            #else
+                for(int j = 0; j<16;j++){
+                    S[j] ^= ad[i*16 + j];
+                }
+                gcm_gf_multiply(S, S, H);
+            #endif
+        }
+        if(extraAD){
+            uint8_t extrablock[16] = {0};
+            memcpy(extrablock, ad+(adBlocks*16), extraAD);
+            #if defined(HARDWARE_SPEED)
+                __m128i block = _mm_loadu_si128((__m128i*)extrablock);
+                gcm_ghash(block, &S_hw, H_hw);
+            #else
+                for(int i = 0; i<sizeof S; i++){            
+                    S[i] ^= extrablock[i];
+                }
+                gcm_gf_multiply(S, S, H);
+            #endif        
+        }
     }
 
     for(int i = 0; i<n;i++){
@@ -570,24 +575,26 @@ int s_aes_128_gcm_decrypt(uint8_t* plaintext, uint8_t* ad, int ad_len, uint8_t* 
 
         #if defined(HARDWARE_SPEED)
             aes128_encrypt_block_hw(Jn, round_keys, cipherblock);
-
             xor_16_hardware(plaintext+(i*16), ciphertext+(i*16), cipherblock);
-            xor_16_hardware(S, S, ciphertext+(i*16));
+            __m128i block = _mm_loadu_si128((__m128i*)ciphertext+16*i);
+            gcm_ghash(block, &S_hw, H_hw);
         #else
             aes128_engine_no_hw(Jn, w, cipherblock);
             for(int j = 0; j<16; j++){
                 plaintext[i+j] = cipherblock[j] ^ ciphertext[i+j];
                 S[j] ^= ciphertext[(i*16)+j];
             }
+            gcm_gf_multiply(S, S, H);
         #endif
-        counter++;
-        gcm_gf_multiply(S, S, H);
+        counter++;        
     }
+
     if(extra_ciphertext){
         uint8_t extrablock[16] = {0};
         memcpy(extrablock, ciphertext+(n*16), extra_ciphertext);
         
         get_Jn_bytes(Jn, iv, counter);
+
         #if defined(HARDWARE_SPEED)
             aes128_encrypt_block_hw(Jn, round_keys, cipherblock);
         #else
@@ -598,14 +605,16 @@ int s_aes_128_gcm_decrypt(uint8_t* plaintext, uint8_t* ad, int ad_len, uint8_t* 
         for(int i = 0; i<extra_ciphertext;i++){
             plaintext[(n*16)+i] = extrablock[i] ^ cipherblock[i];
         }
+
         #if defined(HARDWARE_SPEED)
-            xor_16_hardware(S, S, extrablock);
+            __m128i block = _mm_loadu_si128((__m128i*)extrablock);
+            gcm_ghash(block, &S_hw, H_hw);
         #else
             for(int i = 0; i<16;i++){
                 S[i] ^= extrablock[i];
             }
-        #endif
-        gcm_gf_multiply(S, S, H);
+            gcm_gf_multiply(S, S, H);
+        #endif        
     }
 
     uint8_t lenA[8] = {0};
@@ -617,24 +626,23 @@ int s_aes_128_gcm_decrypt(uint8_t* plaintext, uint8_t* ad, int ad_len, uint8_t* 
     uint8_t lenBlock[16];
     combine_array(lenBlock, lenA, 8, lenC, 8);
 
+    uint8_t T[16] = {0};
+
     #if defined(HARDWARE_SPEED)
-        xor_16_hardware(S, S, lenBlock);
+        __m128i block = _mm_loadu_si128((__m128i*)lenBlock);
+        gcm_ghash(block, &S_hw, H_hw);
+        S_hw = _mm_shuffle_epi8(S_hw, reverse_mask);
+        _mm_storeu_si128((__m128i*)S, S_hw);
+        aes128_encrypt_block_hw(J0, round_keys, T);
+        xor_16_hardware(T, T, S);
     #else
         for(int i = 0; i<sizeof S;i++){
             S[i] ^= lenBlock[i];
         }
-    #endif
-
-    gcm_gf_multiply(S, S, H);
-
-    uint8_t T[16] = {0};
-
-    #if defined(HARDWARE_SPEED)
-        aes128_encrypt_block_hw(J0, round_keys, T);
-        xor_16_hardware(T, S, T);
-    #else
+        gcm_gf_multiply(S, S, H);
         aes128_engine_no_hw(J0, w, T);
-        for(int i = 0; i<sizeof S;i++){
+
+        for(int i = 0; i< sizeof J0; i++){
             T[i] ^= S[i];
         }
     #endif
@@ -643,10 +651,10 @@ int s_aes_128_gcm_decrypt(uint8_t* plaintext, uint8_t* ad, int ad_len, uint8_t* 
     uint8_t notEqual = 0;
     for(int i = 0; i<16;i++){
         notEqual |= (tag[i] ^ T[i]);
-        printf("notEqual=%d, tag[i]=%02x, T[i]=%02x\n", notEqual, tag[i], T[i]);
+        // printf("notEqual=%d, tag[i]=%02x, T[i]=%02x\n", notEqual, tag[i], T[i]);
     }
-    printf("tag:"); print_hex(tag, 16);
-    printf("T  :"); print_hex(T, 16);
+    // printf("tag:"); print_hex(tag, 16);
+    // printf("T  :"); print_hex(T, 16);
     return notEqual;
 }
 void s_aes128_gcm_encrypt_combind(uint8_t* ciphertext, uint8_t* plaintext, int plaintext_length, uint8_t* ad, int ad_len, uint8_t key[aes_128_key_bytes], uint8_t iv[12]){
@@ -655,7 +663,7 @@ void s_aes128_gcm_encrypt_combind(uint8_t* ciphertext, uint8_t* plaintext, int p
     memcpy(ciphertext+plaintext_length, tag, sizeof tag);
 }
 int  s_aes_128_gcm_decrypt_combind(uint8_t* plaintext, uint8_t* ad, int ad_len, uint8_t* ciphertext, int ciphertext_length, uint8_t key[aes_128_key_bytes], uint8_t iv[12]){
-    uint8_t tag[16];
+    uint8_t tag[16] = {0};
     memcpy(tag, ciphertext + ciphertext_length - sizeof tag, sizeof tag);
-    return s_aes_128_gcm_decrypt(plaintext, ad, ad_len, ciphertext, ciphertext_length - sizeof tag, tag, key, iv);
+    return s_aes_128_gcm_decrypt(plaintext, ad, ad_len, ciphertext, ciphertext_length - 16, tag, key, iv);
 }

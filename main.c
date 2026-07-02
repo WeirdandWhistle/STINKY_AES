@@ -6,12 +6,12 @@ void from_hex(uint8_t* out, char* in, int len){
     size_t outlen;
     sodium_hex2bin(out, len/2, in, len, NULL, &outlen, NULL);
 }
-// void print_hex(unsigned char* a, int aSize){
-//     for(int i = 0; i<aSize;i++){
-//         printf("%02X",a[i]);
-//     }
-//     printf("\n");
-// }
+void print_hex(unsigned char* a, int aSize){
+    for(int i = 0; i<aSize;i++){
+        printf("%02X",a[i]);
+    }
+    printf("\n");
+}
 int main(){
 
     uint8_t key[16] = {0};
